@@ -140,26 +140,7 @@ struct ArchivedView: View {
         }
         
         // Apply sorting
-        return sortCards(soldCards)
-    }
-    
-    private func sortCards(_ cards: [Cards]) -> [Cards] {
-        cards.sorted { card1, card2 in
-            let result: Bool
-            switch sortOption {
-            case .date:
-                result = card1.purchaseDate < card2.purchaseDate
-            case .profit:
-                result = (card1.profit ?? 0) < (card2.profit ?? 0)
-            case .buyPrice:
-                result = card1.buyPrice < card2.buyPrice
-            case .salePrice:
-                result = (card1.salePrice ?? 0) < (card2.salePrice ?? 0)
-            case .name:
-                result = card1.name < card2.name
-            }
-            return sortAscending ? result : !result
-        }
+        return soldCards.sorted(by: sortOption.rawValue, ascending: sortAscending)
     }
     
     private var sealedProducts: [SealedProduct] {
@@ -204,26 +185,7 @@ struct ArchivedView: View {
         }
         
         // Apply sorting
-        return sortProducts(soldProducts)
-    }
-    
-    private func sortProducts(_ products: [SealedProduct]) -> [SealedProduct] {
-        products.sorted { product1, product2 in
-            let result: Bool
-            switch sortOption {
-            case .date:
-                result = product1.purchaseDate < product2.purchaseDate
-            case .profit:
-                result = (product1.profit ?? 0) < (product2.profit ?? 0)
-            case .buyPrice:
-                result = product1.buyPrice < product2.buyPrice
-            case .salePrice:
-                result = (product1.salePrice ?? 0) < (product2.salePrice ?? 0)
-            case .name:
-                result = product1.name < product2.name
-            }
-            return sortAscending ? result : !result
-        }
+        return soldProducts.sorted(by: sortOption.rawValue, ascending: sortAscending)
     }
     
     private var filteredMiscExpenses: [MiscExpense] {
@@ -257,26 +219,7 @@ struct ArchivedView: View {
         }
         
         // Apply sorting
-        return sortExpenses(expenses)
-    }
-    
-    private func sortExpenses(_ expenses: [MiscExpense]) -> [MiscExpense] {
-        expenses.sorted { expense1, expense2 in
-            let result: Bool
-            switch sortOption {
-            case .date:
-                result = expense1.purchaseDate < expense2.purchaseDate
-            case .profit:
-                // For expenses, treat cost as negative profit
-                result = -expense1.cost < -expense2.cost
-            case .buyPrice, .salePrice:
-                // For expenses, use cost for both buy and sale price sorting
-                result = expense1.cost < expense2.cost
-            case .name:
-                result = expense1.itemDescription < expense2.itemDescription
-            }
-            return sortAscending ? result : !result
-        }
+        return expenses.sorted(by: sortOption.rawValue, ascending: sortAscending)
     }
     
     private var activeFilterCount: Int {
@@ -376,19 +319,11 @@ struct ArchivedView: View {
     }
     
     private var emptyStateView: some View {
-        VStack {
-            Spacer()
-            Image(systemName: "archivebox")
-                .font(.system(size: 60))
-                .foregroundColor(.secondary)
-                .padding(.bottom, 16)
-            Text("No archived items")
-                .font(.system(size: 22, weight: .semibold))
-            Text("Items you sold will appear here")
-                .foregroundColor(.secondary)
-                .padding(.top, 4)
-            Spacer()
-        }
+        EmptyStateView(
+            icon: "archivebox",
+            title: "No archived items",
+            subtitle: "Items you sold will appear here"
+        )
     }
     
     private var archiveListView: some View {
@@ -515,39 +450,20 @@ struct ArchivedView: View {
     }
     
     private var noResultsSection: some View {
-        Section {
-            VStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 40))
-                    .foregroundColor(.gray)
-                Text("No Results")
-                    .font(.headline)
-                    .foregroundColor(.secondary)
-                Text("Try adjusting your search or filters")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 40)
-        }
+        NoResultsView()
     }
     
     private var cardsSection: some View {
         Section("Cards") {
             ForEach(cards) { card in
-                CardRowView(
+                InventoryCardRow(
                     card: card,
                     isMultiSelectMode: isMultiSelectMode,
                     isSelected: selectedCards.contains(card.id),
-                    onTap: {
-                        handleCardTap(card)
-                    },
-                    onDelete: {
-                        modelContext.delete(card)
-                    },
-                    onEdit: {
-                        selectedCard = card
-                    }
+                    showProfit: true,
+                    onTap: { handleCardTap(card) },
+                    onDelete: { modelContext.delete(card) },
+                    onEdit: { selectedCard = card }
                 )
             }
         }
@@ -556,19 +472,14 @@ struct ArchivedView: View {
     private var sealedProductsSection: some View {
         Section("Sealed Products") {
             ForEach(sealedProducts) { product in
-                SealedProductRowView(
+                InventorySealedProductRow(
                     product: product,
                     isMultiSelectMode: isMultiSelectMode,
                     isSelected: selectedProducts.contains(product.id),
-                    onTap: {
-                        handleProductTap(product)
-                    },
-                    onDelete: {
-                        modelContext.delete(product)
-                    },
-                    onEdit: {
-                        selectedProduct = product
-                    }
+                    showProfit: true,
+                    onTap: { handleProductTap(product) },
+                    onDelete: { modelContext.delete(product) },
+                    onEdit: { selectedProduct = product }
                 )
             }
         }
@@ -577,19 +488,13 @@ struct ArchivedView: View {
     private var miscExpensesSection: some View {
         Section("Misc Expenses") {
             ForEach(filteredMiscExpenses) { expense in
-                MiscExpenseRowView(
+                InventoryMiscExpenseRow(
                     expense: expense,
                     isMultiSelectMode: isMultiSelectMode,
                     isSelected: selectedExpenses.contains(expense.id),
-                    onTap: {
-                        handleExpenseTap(expense)
-                    },
-                    onDelete: {
-                        modelContext.delete(expense)
-                    },
-                    onEdit: {
-                        selectedExpense = expense
-                    }
+                    onTap: { handleExpenseTap(expense) },
+                    onDelete: { modelContext.delete(expense) },
+                    onEdit: { selectedExpense = expense }
                 )
             }
         }
@@ -660,213 +565,6 @@ struct ArchivedView: View {
             }
         } else {
             selectedExpense = expense
-        }
-    }
-}
-
-// MARK: - Row Views
-struct CardRowView: View {
-    let card: Cards
-    let isMultiSelectMode: Bool
-    let isSelected: Bool
-    let onTap: () -> Void
-    let onDelete: () -> Void
-    let onEdit: () -> Void
-    
-    var body: some View {
-        HStack {
-            if isMultiSelectMode {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isSelected ? .blue : .gray)
-                    .imageScale(.large)
-            }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(card.name)
-                        .font(.headline)
-                    Spacer()
-                    let conditionColor = Color.conditionColor(for: card.condition, isGraded: card.graded)
-                    Text(card.graded ? "GRADED" : card.condition)
-                        .font(.caption2)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(conditionColor.opacity(0.2))
-                        .foregroundColor(conditionColor)
-                        .cornerRadius(4)
-                }
-                Text("#\(card.number ?? "")")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                HStack {
-                    Text("Buy: $\(Double(truncating: card.buyPrice as NSNumber), specifier: "%.2f")")
-                        .font(.subheadline)
-                    if let salePrice = card.salePrice {
-                        Text("Sale: $\(Double(truncating: salePrice as NSNumber), specifier: "%.2f")")
-                            .font(.subheadline)
-                        if let profit = card.profit {
-                            Text("\(profit >= 0 ? "+" : "")$\(Double(truncating: profit as NSNumber), specifier: "%.2f")")
-                                .font(.subheadline)
-                                .foregroundColor(profit >= 0 ? .green : .red)
-                            
-                            if let roi = card.roi {
-                                Text("(\(roi >= 0 ? "+" : "")\(roi, specifier: "%.2f")%)")                                    .font(.subheadline)
-                                    .foregroundColor(roi >= 0 ? .green : .red)
-                            }
-                        }
-                    }
-                }
-                Text("\(card.purchaseDate, format: .dateTime.month().day().year())")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-        }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onTap)
-        .contextMenu {
-            if !isMultiSelectMode {
-                Button {
-                    onEdit()
-                } label: {
-                    Label("Edit Details", systemImage: "pencil")
-                }
-                
-                Divider()
-                
-                Button(role: .destructive) {
-                    onDelete()
-                } label: {
-                    Label("Delete", systemImage: "trash")
-                }
-            }
-        }
-    }
-}
-
-struct SealedProductRowView: View {
-    let product: SealedProduct
-    let isMultiSelectMode: Bool
-    let isSelected: Bool
-    let onTap: () -> Void
-    let onDelete: () -> Void
-    let onEdit: () -> Void
-    
-    var body: some View {
-        HStack {
-            if isMultiSelectMode {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isSelected ? .blue : .gray)
-                    .imageScale(.large)
-            }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(product.name)
-                    .font(.headline)
-                Text(product.expansion ?? "")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                HStack {
-                    Text("Buy: $\(Double(truncating: product.buyPrice as NSNumber), specifier: "%.2f")")
-                        .font(.subheadline)
-                    if let salePrice = product.salePrice {
-                        Text("Sale: $\(Double(truncating: salePrice as NSNumber), specifier: "%.2f")")
-                            .font(.subheadline)
-                        if let profit = product.profit {
-                            Text("\(profit >= 0 ? "+" : "")$\(Double(truncating: profit as NSNumber), specifier: "%.2f")")
-                                .font(.subheadline)
-                                .foregroundColor(profit >= 0 ? .green : .red)
-                            
-                            if let roi = product.roi {
-                                Text("(\(roi >= 0 ? "+" : "")\(roi, specifier: "%.2f")%)")
-                                    .font(.subheadline)
-                                    .foregroundColor(roi >= 0 ? .green : .red)
-                            }
-                        }
-                    }
-                }
-                Text("\(product.purchaseDate, format: .dateTime.month().day().year())")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-        }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onTap)
-        .contextMenu {
-            if !isMultiSelectMode {
-                Button {
-                    onEdit()
-                } label: {
-                    Label("Edit Details", systemImage: "pencil")
-                }
-                
-                Divider()
-                
-                Button(role: .destructive) {
-                    onDelete()
-                } label: {
-                    Label("Delete", systemImage: "trash")
-                }
-            }
-        }
-    }
-}
-
-struct MiscExpenseRowView: View {
-    let expense: MiscExpense
-    let isMultiSelectMode: Bool
-    let isSelected: Bool
-    let onTap: () -> Void
-    let onDelete: () -> Void
-    let onEdit: () -> Void
-    
-    var body: some View {
-        HStack {
-            if isMultiSelectMode {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isSelected ? .blue : .gray)
-                    .imageScale(.large)
-            }
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(expense.itemDescription)
-                    .font(.headline)
-                if let notes = expense.notes, !notes.isEmpty {
-                    Text(notes)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
-                }
-                HStack {
-                    Text("Cost: $\(Double(truncating: expense.cost as NSNumber), specifier: "%.2f")")
-                        .font(.subheadline)
-                        .foregroundColor(.red)
-                    Text("• \(expense.purchaseDate, format: .dateTime.month().day().year())")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-            }
-        }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onTap)
-        .contextMenu {
-            if !isMultiSelectMode {
-                Button {
-                    onEdit()
-                } label: {
-                    Label("Edit Details", systemImage: "pencil")
-                }
-                
-                Divider()
-                
-                Button(role: .destructive) {
-                    onDelete()
-                } label: {
-                    Label("Delete", systemImage: "trash")
-                }
-            }
         }
     }
 }
@@ -1097,105 +795,6 @@ struct ArchivedFilterView: View {
                 }
             }
         }
-    }
-}
-
-// MARK: - Range Slider
-struct RangeSlider: View {
-    @Binding var minValue: Double
-    @Binding var maxValue: Double
-    let bounds: ClosedRange<Double>
-    var step: Double = 0.01
-    
-    @State private var minOffset: CGFloat = 0
-    @State private var maxOffset: CGFloat = 0
-    @State private var trackWidth: CGFloat = 0
-    
-    private let thumbSize: CGFloat = 28
-    private let trackHeight: CGFloat = 4
-    
-    var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                // Background track
-                RoundedRectangle(cornerRadius: trackHeight / 2)
-                    .fill(Color.gray.opacity(0.2))
-                    .frame(height: trackHeight)
-                
-                // Active track (between thumbs)
-                RoundedRectangle(cornerRadius: trackHeight / 2)
-                    .fill(Color.blue)
-                    .frame(width: max(0, maxOffset - minOffset), height: trackHeight)
-                    .offset(x: minOffset)
-                
-                // Min thumb
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: thumbSize, height: thumbSize)
-                    .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
-                    .overlay(
-                        Circle()
-                            .stroke(Color.blue, lineWidth: 2)
-                    )
-                    .offset(x: minOffset - thumbSize / 2)
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { value in
-                                let newOffset = max(0, min(maxOffset - thumbSize, value.location.x - thumbSize / 2))
-                                minOffset = newOffset
-                                let percentage = newOffset / (geometry.size.width - thumbSize)
-                                let range = bounds.upperBound - bounds.lowerBound
-                                let rawValue = bounds.lowerBound + (range * Double(percentage))
-                                minValue = (rawValue / step).rounded() * step
-                            }
-                    )
-                
-                // Max thumb
-                Circle()
-                    .fill(Color.white)
-                    .frame(width: thumbSize, height: thumbSize)
-                    .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
-                    .overlay(
-                        Circle()
-                            .stroke(Color.blue, lineWidth: 2)
-                    )
-                    .offset(x: maxOffset - thumbSize / 2)
-                    .gesture(
-                        DragGesture(minimumDistance: 0)
-                            .onChanged { value in
-                                let newOffset = max(minOffset + thumbSize, min(geometry.size.width, value.location.x - thumbSize / 2))
-                                maxOffset = newOffset
-                                let percentage = newOffset / (geometry.size.width - thumbSize)
-                                let range = bounds.upperBound - bounds.lowerBound
-                                let rawValue = bounds.lowerBound + (range * Double(percentage))
-                                maxValue = (rawValue / step).rounded() * step
-                            }
-                    )
-            }
-            .frame(height: thumbSize)
-            .onAppear {
-                updateOffsets(width: geometry.size.width)
-            }
-            .onChange(of: geometry.size.width) { _, newWidth in
-                updateOffsets(width: newWidth)
-            }
-            .onChange(of: minValue) { _, _ in
-                updateOffsets(width: geometry.size.width)
-            }
-            .onChange(of: maxValue) { _, _ in
-                updateOffsets(width: geometry.size.width)
-            }
-        }
-    }
-    
-    private func updateOffsets(width: CGFloat) {
-        let range = bounds.upperBound - bounds.lowerBound
-        let minPercentage = CGFloat((minValue - bounds.lowerBound) / range)
-        let maxPercentage = CGFloat((maxValue - bounds.lowerBound) / range)
-        
-        trackWidth = width - thumbSize
-        minOffset = minPercentage * trackWidth
-        maxOffset = maxPercentage * trackWidth
     }
 }
 

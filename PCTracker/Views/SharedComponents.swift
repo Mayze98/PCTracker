@@ -62,7 +62,7 @@ struct InventoryCardRow: View {
                                 .foregroundColor(profit >= 0 ? .green : .red)
                             
                             if let roi = card.roi {
-                                Text("(\(roi >= 0 ? "+" : "")\(Double(roi))%)")
+                                Text("(\(roi >= 0 ? "+" : "")\(roi, specifier: "%.1f")%)")
                                     .font(.subheadline)
                                     .foregroundColor(roi >= 0 ? .green : .red)
                             }
@@ -139,7 +139,7 @@ struct InventorySealedProductRow: View {
                                 .foregroundColor(profit >= 0 ? .green : .red)
                             
                             if let roi = product.roi {
-                                Text("(\(roi >= 0 ? "+" : "")\(roi, specifier: "%.2f")%)")
+                                Text("(\(roi >= 0 ? "+" : "")\(roi, specifier: "%.1f")%)")
                                     .font(.subheadline)
                                     .foregroundColor(roi >= 0 ? .green : .red)
                             }
@@ -496,3 +496,74 @@ struct NoResultsView: View {
         }
     }
 }
+// MARK: - Sorting Extensions
+
+extension Array where Element == Cards {
+    func sorted(by option: String, ascending: Bool) -> [Cards] {
+        sorted { card1, card2 in
+            let result: Bool
+            switch option {
+            case "Date":
+                result = card1.purchaseDate < card2.purchaseDate
+            case "Profit":
+                result = (card1.profit ?? 0) < (card2.profit ?? 0)
+            case "Buy Price":
+                result = card1.buyPrice < card2.buyPrice
+            case "Sale Price":
+                result = (card1.salePrice ?? 0) < (card2.salePrice ?? 0)
+            case "Name":
+                result = card1.name < card2.name
+            default:
+                result = card1.purchaseDate < card2.purchaseDate
+            }
+            return ascending ? result : !result
+        }
+    }
+}
+
+extension Array where Element == SealedProduct {
+    func sorted(by option: String, ascending: Bool) -> [SealedProduct] {
+        sorted { product1, product2 in
+            let result: Bool
+            switch option {
+            case "Date":
+                result = product1.purchaseDate < product2.purchaseDate
+            case "Profit":
+                result = (product1.profit ?? 0) < (product2.profit ?? 0)
+            case "Buy Price":
+                result = product1.buyPrice < product2.buyPrice
+            case "Sale Price":
+                result = (product1.salePrice ?? 0) < (product2.salePrice ?? 0)
+            case "Name":
+                result = product1.name < product2.name
+            default:
+                result = product1.purchaseDate < product2.purchaseDate
+            }
+            return ascending ? result : !result
+        }
+    }
+}
+
+extension Array where Element == MiscExpense {
+    func sorted(by option: String, ascending: Bool) -> [MiscExpense] {
+        sorted { expense1, expense2 in
+            let result: Bool
+            switch option {
+            case "Date":
+                result = expense1.purchaseDate < expense2.purchaseDate
+            case "Profit":
+                // For expenses, treat cost as negative profit
+                result = -expense1.cost < -expense2.cost
+            case "Buy Price", "Sale Price":
+                // For expenses, use cost for both buy and sale price sorting
+                result = expense1.cost < expense2.cost
+            case "Name":
+                result = expense1.itemDescription < expense2.itemDescription
+            default:
+                result = expense1.purchaseDate < expense2.purchaseDate
+            }
+            return ascending ? result : !result
+        }
+    }
+}
+

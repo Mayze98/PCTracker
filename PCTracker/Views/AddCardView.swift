@@ -445,11 +445,6 @@ struct AddMiscFormView: View {
     @State private var showingAlert = false
     @State private var alertMessage = ""
     
-//    var itemDescription: String
-//    var cost: Double
-//    var purchaseDate: Date
-//    var notes: String?
-    
     var body: some View {
         NavigationStack {
             Form {

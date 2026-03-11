@@ -59,6 +59,32 @@ struct InventoryView: View {
         if usePriceFilter { count += 1 }
         return count
     }
+    
+    private func sortCards(_ cards: [Cards]) -> [Cards] {
+        cards.sorted { lhs, rhs in
+            switch sortOption {
+            case .buyPrice:
+                return sortAscending ? lhs.buyPrice < rhs.buyPrice : lhs.buyPrice > rhs.buyPrice
+            case .name:
+                return sortAscending ? lhs.name < rhs.name : lhs.name > rhs.name
+            case .date:
+                return sortAscending ? lhs.purchaseDate < rhs.purchaseDate : lhs.purchaseDate > rhs.purchaseDate
+            }
+        }
+    }
+    
+    private func sortSealedProducts(_ products: [SealedProduct]) -> [SealedProduct] {
+        products.sorted { lhs, rhs in
+            switch sortOption {
+            case .buyPrice:
+                return sortAscending ? lhs.buyPrice < rhs.buyPrice : lhs.buyPrice > rhs.buyPrice
+            case .name:
+                return sortAscending ? lhs.name < rhs.name : lhs.name > rhs.name
+            case .date:
+                return sortAscending ? lhs.purchaseDate < rhs.purchaseDate : lhs.purchaseDate > rhs.purchaseDate
+            }
+        }
+    }
 
     // Filter out items that have been sold (have a salePrice)
     private var cards: [Cards] {
@@ -110,19 +136,6 @@ struct InventoryView: View {
         return sortCards(filteredCards)
     }
     
-    private func sortCards(_ cards: [Cards]) -> [Cards] {
-        cards.sorted { card1, card2 in
-            switch sortOption {
-            case .buyPrice:
-                return sortAscending ? card1.buyPrice < card2.buyPrice : card1.buyPrice > card2.buyPrice
-            case .name:
-                return sortAscending ? card1.name > card2.name : card1.name < card2.name
-            case .date:
-                return sortAscending ? card1.purchaseDate < card2.purchaseDate : card1.purchaseDate > card2.purchaseDate
-            }
-        }
-    }
-    
     private var sealedProducts: [SealedProduct] {
         var inventoryProducts = allSealedProducts.filter { $0.salePrice == nil }
         
@@ -150,19 +163,6 @@ struct InventoryView: View {
         
         return sortSealedProducts(filteredProducts)
     }
-    
-    private func sortSealedProducts(_ products: [SealedProduct]) -> [SealedProduct] {
-        products.sorted { product1, product2 in
-            switch sortOption {
-            case .buyPrice:
-                return sortAscending ? product1.buyPrice < product2.buyPrice : product1.buyPrice > product2.buyPrice
-            case .name:
-                return sortAscending ? product1.name > product2.name : product1.name < product2.name
-            case .date:
-                return sortAscending ? product1.purchaseDate < product2.purchaseDate : product1.purchaseDate > product2.purchaseDate
-            }
-        }
-    }
 
     private var totalCards: Double {
         cards.reduce(0.0) { $0 + $1.buyPrice }
@@ -180,20 +180,11 @@ struct InventoryView: View {
         NavigationView {
             Group {
                 if !hasAnyItems {
-                    // Truly empty inventory - no items at all
-                    VStack {
-                        Spacer()
-                        Image(systemName: "cube.box")
-                            .font(.system(size: 60))
-                            .foregroundColor(.gray)
-                        Text("No Items Yet")
-                            .font(.headline)
-                            .padding(.top, 8)
-                        Text("Add items to get started")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                        Spacer()
-                    }
+                    EmptyStateView(
+                        icon: "cube.box",
+                        title: "No Items Yet",
+                        subtitle: "Add items to get started"
+                    )
                 } else {
                     List {
                         // Action Buttons
@@ -288,91 +279,36 @@ struct InventoryView: View {
                         
                         // No Results Message
                         if cards.isEmpty && sealedProducts.isEmpty {
-                            Section {
-                                VStack(spacing: 8) {
-                                    Image(systemName: "magnifyingglass")
-                                        .font(.system(size: 40))
-                                        .foregroundColor(.gray)
-                                    Text("No Results")
-                                        .font(.headline)
-                                        .foregroundColor(.secondary)
-                                    Text("Try adjusting your search or filters")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 40)
-                            }
+                            NoResultsView()
                         }
                         
                         // Cards Section
                         if !cards.isEmpty {
                             Section("Cards") {
                                 ForEach(cards) { card in
-                                    HStack {
-                                        if isMultiSelectMode {
-                                            Image(systemName: selectedCards.contains(card.id) ? "checkmark.circle.fill" : "circle")
-                                                .foregroundColor(selectedCards.contains(card.id) ? .blue : .gray)
-                                                .imageScale(.large)
-                                        }
-                                        
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            HStack {
-                                                Text(card.name)
-                                                    .font(.headline)
-                                                Spacer()
-                                                let conditionColor = Color.conditionColor(for: card.condition, isGraded: card.graded)
-                                                Text(card.graded ? "GRADED" : card.condition)
-                                                    .font(.caption2)
-                                                    .padding(.horizontal, 6)
-                                                    .padding(.vertical, 2)
-                                                    .background(conditionColor.opacity(0.2))
-                                                    .foregroundColor(conditionColor)
-                                                    .cornerRadius(4)
-                                            }
-                                            Text("#\(card.number ?? "")")
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
-                                            HStack {
-                                                Text("Buy: $\(card.buyPrice, format: .number.precision(.fractionLength(2)))")
-                                                    .font(.subheadline)
-                                                Text("\(card.purchaseDate, format: .dateTime.month().day().year())")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                            }
-                                        }
-                                    }
-                                    .padding(.vertical, 4)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        if isMultiSelectMode {
-                                            if selectedCards.contains(card.id) {
-                                                selectedCards.remove(card.id)
+                                    InventoryCardRow(
+                                        card: card,
+                                        isMultiSelectMode: isMultiSelectMode,
+                                        isSelected: selectedCards.contains(card.id),
+                                        showProfit: false,
+                                        onTap: {
+                                            if isMultiSelectMode {
+                                                if selectedCards.contains(card.id) {
+                                                    selectedCards.remove(card.id)
+                                                } else {
+                                                    selectedCards.insert(card.id)
+                                                }
                                             } else {
-                                                selectedCards.insert(card.id)
+                                                selectedCard = card
                                             }
-                                        } else {
-                                            // Edit the card
+                                        },
+                                        onDelete: {
+                                            modelContext.delete(card)
+                                        },
+                                        onEdit: {
                                             selectedCard = card
                                         }
-                                    }
-                                    .contextMenu {
-                                        if !isMultiSelectMode {
-                                            Button {
-                                                selectedCard = card
-                                            } label: {
-                                                Label("Edit Details", systemImage: "pencil")
-                                            }
-                                            
-                                            Divider()
-                                            
-                                            Button(role: .destructive) {
-                                                modelContext.delete(card)
-                                            } label: {
-                                                Label("Delete", systemImage: "trash")
-                                            }
-                                        }
-                                    }
+                                    )
                                 }
                             }
                         }
@@ -381,59 +317,29 @@ struct InventoryView: View {
                         if !sealedProducts.isEmpty {
                             Section("Sealed Products") {
                                 ForEach(sealedProducts) { product in
-                                    HStack {
-                                        if isMultiSelectMode {
-                                            Image(systemName: selectedProducts.contains(product.id) ? "checkmark.circle.fill" : "circle")
-                                                .foregroundColor(selectedProducts.contains(product.id) ? .blue : .gray)
-                                                .imageScale(.large)
-                                        }
-                                        
-                                        VStack(alignment: .leading, spacing: 4) {
-                                            Text(product.name)
-                                                .font(.headline)
-                                            Text(product.expansion ?? "")
-                                                .font(.subheadline)
-                                                .foregroundColor(.secondary)
-                                            HStack {
-                                                Text("Buy: $\(product.buyPrice, format: .number.precision(.fractionLength(2)))")
-                                                    .font(.subheadline)
-                                                Text("\(product.purchaseDate, format: .dateTime.month().day().year())")
-                                                    .font(.caption)
-                                                    .foregroundColor(.secondary)
-                                            }
-                                        }
-                                    }
-                                    .padding(.vertical, 4)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        if isMultiSelectMode {
-                                            if selectedProducts.contains(product.id) {
-                                                selectedProducts.remove(product.id)
+                                    InventorySealedProductRow(
+                                        product: product,
+                                        isMultiSelectMode: isMultiSelectMode,
+                                        isSelected: selectedProducts.contains(product.id),
+                                        showProfit: false,
+                                        onTap: {
+                                            if isMultiSelectMode {
+                                                if selectedProducts.contains(product.id) {
+                                                    selectedProducts.remove(product.id)
+                                                } else {
+                                                    selectedProducts.insert(product.id)
+                                                }
                                             } else {
-                                                selectedProducts.insert(product.id)
+                                                selectedProduct = product
                                             }
-                                        } else {
-                                            // Edit the product
+                                        },
+                                        onDelete: {
+                                            modelContext.delete(product)
+                                        },
+                                        onEdit: {
                                             selectedProduct = product
                                         }
-                                    }
-                                    .contextMenu {
-                                        if !isMultiSelectMode {
-                                            Button {
-                                                selectedProduct = product
-                                            } label: {
-                                                Label("Edit Details", systemImage: "pencil")
-                                            }
-                                            
-                                            Divider()
-                                            
-                                            Button(role: .destructive) {
-                                                modelContext.delete(product)
-                                            } label: {
-                                                Label("Delete", systemImage: "trash")
-                                            }
-                                        }
-                                    }
+                                    )
                                 }
                             }
                         }
