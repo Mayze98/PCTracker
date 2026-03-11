@@ -17,52 +17,117 @@ struct AddCardView: View {
     
     var body: some View {
         NavigationView {
-            VStack {
-                Button(action: {
-                    showingAddCard = true
-                }) {
-                    Text("\(Image(systemName: "plus.circle")) Add card")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color.adaptiveBlueOrange)
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Add Card Button
+                    Button(action: {
+                        showingAddCard = true
+                    }) {
+                        HStack(spacing: 16) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundColor(.adaptiveBlueOrange)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Add card")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                
+                                Text("Raw or graded cards")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(16)
+                        .background(Color(uiColor: .secondarySystemGroupedBackground))
                         .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.adaptiveBlueOrange.opacity(0.2), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    
+                    // Add Sealed Product Button
+                    Button(action: {
+                        showingAddProduct = true
+                    }) {
+                        HStack(spacing: 16) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundColor(.adaptiveBlueOrange)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Add sealed product")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                
+                                Text("Booster boxes, ETBs, packs, etc.")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(16)
+                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.adaptiveBlueOrange.opacity(0.2), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    
+                    // Add Miscellaneous Expense Button
+                    Button(action: {
+                        showingAddMisc = true
+                    }) {
+                        HStack(spacing: 16) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 32))
+                                .foregroundColor(.adaptiveBlueOrange)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Add miscellaneous expense")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                
+                                Text("Card show fees, supplies, grading fees, etc.")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(16)
+                        .background(Color(uiColor: .secondarySystemGroupedBackground))
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.adaptiveBlueOrange.opacity(0.2), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
                 .padding(.horizontal)
-                .padding(.top, 32)
-                .padding(.bottom, 16)
-
-                Button(action: {
-                    showingAddProduct = true
-                }) {
-                    Text("\(Image(systemName: "plus.circle")) Add sealed product")
-                        .font(.system(size:17, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color.adaptiveBlueOrange)
-                        .cornerRadius(12)
-                }
-                .padding(.horizontal)
-                .padding(.bottom, 16)
-                Button(action: {
-                    showingAddMisc = true
-                }) {
-                    Text("\(Image(systemName: "plus.circle")) Add misc expense")
-                        .font(.system(size:17, weight: .semibold))
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(Color.adaptiveBlueOrange)
-                        .cornerRadius(12)
-                }
-                .padding(.horizontal)
-                .padding(.bottom, 16)
-                
-                Spacer()
-
+                .padding(.top, 24)
             }
+            .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle("Add Inventory")
             .sheet(isPresented: $showingAddCard) {
                 AddCardFormView(modelContext: modelContext, onSave: {
