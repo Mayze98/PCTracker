@@ -42,6 +42,12 @@ class Cards {
         guard let sale = salePrice else { return nil }
         return sale - buyPrice
     }
+    
+    // return on investment percentage
+    var roi: Double? {
+        guard let profit = profit, buyPrice > 0 else { return nil }
+        return (profit / buyPrice) * 100
+    }
 }
 
 @Model
@@ -70,6 +76,12 @@ class SealedProduct {
     var profit: Double? {
         guard let sale = salePrice else { return nil }
         return sale - buyPrice
+    }
+    
+    // return on investment percentage
+    var roi: Double? {
+        guard let profit = profit, buyPrice > 0 else { return nil }
+        return (profit / buyPrice) * 100
     }
 }
 

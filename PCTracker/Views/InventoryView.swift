@@ -31,6 +31,18 @@ struct InventoryView: View {
     @State private var minPrice: Double = 0
     @State private var maxPrice: Double = 1000
     
+    // Sort states
+    @State private var sortOption: SortOption = .date
+    @State private var sortAscending: Bool = false
+    
+    enum SortOption: String, CaseIterable, Identifiable {
+        case buyPrice = "Buy Price"
+        case name = "Name"
+        case date = "Date"
+        
+        var id: String { rawValue }
+    }
+    
     enum ItemType: String, CaseIterable, Identifiable {
         case cards = "Cards"
         case sealedProducts = "Sealed Products"
@@ -84,13 +96,30 @@ struct InventoryView: View {
         }
         
         // Apply search
-        guard !searchText.isEmpty else { return inventoryCards }
+        guard !searchText.isEmpty else { 
+            return sortCards(inventoryCards)
+        }
         
-        return inventoryCards.filter { card in
+        let filteredCards = inventoryCards.filter { card in
             card.name.localizedCaseInsensitiveContains(searchText) ||
             (card.number?.localizedCaseInsensitiveContains(searchText) ?? false) ||
             card.condition.localizedCaseInsensitiveContains(searchText) ||
             (card.graded && "graded".localizedCaseInsensitiveContains(searchText))
+        }
+        
+        return sortCards(filteredCards)
+    }
+    
+    private func sortCards(_ cards: [Cards]) -> [Cards] {
+        cards.sorted { card1, card2 in
+            switch sortOption {
+            case .buyPrice:
+                return sortAscending ? card1.buyPrice < card2.buyPrice : card1.buyPrice > card2.buyPrice
+            case .name:
+                return sortAscending ? card1.name > card2.name : card1.name < card2.name
+            case .date:
+                return sortAscending ? card1.purchaseDate < card2.purchaseDate : card1.purchaseDate > card2.purchaseDate
+            }
         }
     }
     
@@ -110,11 +139,28 @@ struct InventoryView: View {
         }
         
         // Apply search
-        guard !searchText.isEmpty else { return inventoryProducts }
+        guard !searchText.isEmpty else { 
+            return sortSealedProducts(inventoryProducts)
+        }
         
-        return inventoryProducts.filter { product in
+        let filteredProducts = inventoryProducts.filter { product in
             product.name.localizedCaseInsensitiveContains(searchText) ||
             (product.expansion?.localizedCaseInsensitiveContains(searchText) ?? false)
+        }
+        
+        return sortSealedProducts(filteredProducts)
+    }
+    
+    private func sortSealedProducts(_ products: [SealedProduct]) -> [SealedProduct] {
+        products.sorted { product1, product2 in
+            switch sortOption {
+            case .buyPrice:
+                return sortAscending ? product1.buyPrice < product2.buyPrice : product1.buyPrice > product2.buyPrice
+            case .name:
+                return sortAscending ? product1.name > product2.name : product1.name < product2.name
+            case .date:
+                return sortAscending ? product1.purchaseDate < product2.purchaseDate : product1.purchaseDate > product2.purchaseDate
+            }
         }
     }
 
@@ -186,6 +232,46 @@ struct InventoryView: View {
                                                 .background(Color.adaptiveBlueOrange)
                                                 .clipShape(Capsule())
                                         }
+                                    }
+                                    .font(.subheadline)
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(Color.adaptiveBlueOrange.opacity(0.1))
+                                    .foregroundColor(.adaptiveBlueOrange)
+                                    .cornerRadius(8)
+                                }
+                                .buttonStyle(.plain)
+                                
+                                Menu {
+                                    Picker("Sort By", selection: $sortOption) {
+                                        ForEach(SortOption.allCases) { option in
+                                            Text(option.rawValue).tag(option)
+                                        }
+                                    }
+                                    
+                                    Divider()
+                                    
+                                    Button {
+                                        sortAscending.toggle()
+                                    } label: {
+                                        Label(
+                                            sortAscending ? "Ascending" : "Descending",
+                                            systemImage: sortAscending ? "arrow.up" : "arrow.down"
+                                        )
+                                    }
+                                    
+                                    Divider()
+                                    
+                                    Button(role: .destructive) {
+                                        sortOption = .date
+                                        sortAscending = false
+                                    } label: {
+                                        Label("Clear Sorting", systemImage: "xmark.circle")
+                                    }
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "arrow.up.arrow.down")
+                                        Text("Sort")
                                     }
                                     .font(.subheadline)
                                     .frame(maxWidth: .infinity)
