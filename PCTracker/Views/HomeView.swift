@@ -20,6 +20,8 @@ struct HomeView: View {
     @Query private var allCards: [Cards]
     @Query private var allSealedProducts: [SealedProduct]
     @Query private var miscExpenses: [MiscExpense]
+    
+    @State private var selectedMonth: Date?
 
     // Filter out items that have been sold (have a salePrice)
     private var soldCards: [Cards] {
@@ -156,7 +158,7 @@ struct HomeView: View {
                     StatCard(
                         icon: "dollarsign",
                         iconColor: .green,
-                        title: "Realized",
+                        title: "Net Profit",
                         value: String(format: "$%.1f", totalProfit - expenseCost),
                         valueFontSize: 18
                     )
@@ -168,7 +170,7 @@ struct HomeView: View {
                 StatCard(
                     icon: "chart.line.uptrend.xyaxis",
                     iconColor: .green,
-                    title: "Rate of return",
+                    title: "Return on Investment",
                     value: totalExpenses > 0 ? String(format: "%.2f%%", ((totalSales - totalExpenses)/totalExpenses) * 100) : "0.00%"
                 )
             }
@@ -200,6 +202,7 @@ struct HomeView: View {
                         )
                         .foregroundStyle(item.profit >= 0 ? Color.green : Color.red)
                         .cornerRadius(6)
+                        .opacity(selectedMonth == nil || Calendar.current.isDate(selectedMonth!, equalTo: item.month, toGranularity: .month) ? 1.0 : 0.3)
                     }
                     .chartXAxis {
                         AxisMarks(values: .stride(by: .month)) { value in
@@ -219,8 +222,31 @@ struct HomeView: View {
                             }
                         }
                     }
+                    .chartXSelection(value: $selectedMonth)
                     .frame(height: 200)
                     .padding(.horizontal)
+                    
+                    // Display selected month profit
+                    if let selectedMonth = selectedMonth,
+                       let selectedData = profitByMonth.first(where: { Calendar.current.isDate($0.month, equalTo: selectedMonth, toGranularity: .month) }) {
+                        VStack(spacing: 8) {
+                            Text(selectedData.month, format: .dateTime.month(.wide).year())
+                                .font(.system(size: 16, weight: .semibold))
+                            HStack(spacing: 4) {
+                                Text("Profit:")
+                                    .foregroundColor(.secondary)
+                                Text(selectedData.profit >= 0 ? "+$\(selectedData.profit, specifier: "%.2f")" : "-$\(abs(selectedData.profit), specifier: "%.2f")")
+                                    .font(.system(size: 18, weight: .bold))
+                                    .foregroundColor(selectedData.profit >= 0 ? .green : .red)
+                            }
+                        }
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(Color(.secondarySystemGroupedBackground))
+                        .cornerRadius(12)
+                        .padding(.horizontal)
+                        .transition(.opacity)
+                    }
                 }
             }
             .padding(.vertical)
@@ -231,6 +257,13 @@ struct HomeView: View {
                     .stroke(Color(.separator), lineWidth: 1)
             )
             .padding(.horizontal)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                // Tap outside the chart to deselect
+                withAnimation {
+                    selectedMonth = nil
+                }
+            }
             
             Spacer()
         }
