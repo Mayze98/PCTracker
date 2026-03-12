@@ -49,25 +49,35 @@ struct InventoryCardRow: View {
                 }
                 
                 HStack {
-                    Text("Buy: $\(card.buyPrice, format: .number.precision(.fractionLength(2)))")
-                        .font(.subheadline)
-                    
                     if showProfit, let salePrice = card.salePrice {
-                        Text("Sale: $\(salePrice, format: .number.precision(.fractionLength(2)))")
-                            .font(.subheadline)
-                        
+                        // Show only profit, ROI %, and sale date for archived items
                         if let profit = card.profit {
                             Text("\(profit >= 0 ? "+" : "")$\(profit, format: .number.precision(.fractionLength(2)))")
                                 .font(.subheadline)
-                                .foregroundColor(profit >= 0 ? .green : .red)
+                                .foregroundColor(profit >= 0 ? .softGreen : .softRed)
                             
                             if let roi = card.roi {
                                 Text("(\(roi >= 0 ? "+" : "")\(roi, specifier: "%.1f")%)")
                                     .font(.subheadline)
-                                    .foregroundColor(roi >= 0 ? .green : .red)
+                                    .foregroundColor(roi >= 0 ? .softGreen : .softRed)
                             }
                         }
+                        
+                        // Show sale date if available, otherwise show purchase date
+                        if let saleDate = card.saleDate {
+                            Text("\(saleDate, format: .dateTime.month().day().year())")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("\(card.purchaseDate, format: .dateTime.month().day().year())")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     } else {
+                        // Show buy price and purchase date for inventory items
+                        Text("Buy: $\(card.buyPrice, format: .number.precision(.fractionLength(2)))")
+                            .font(.subheadline)
+                        
                         Text("\(card.purchaseDate, format: .dateTime.month().day().year())")
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -126,25 +136,35 @@ struct InventorySealedProductRow: View {
                 }
                 
                 HStack {
-                    Text("Buy: $\(product.buyPrice, format: .number.precision(.fractionLength(2)))")
-                        .font(.subheadline)
-                    
                     if showProfit, let salePrice = product.salePrice {
-                        Text("Sale: $\(salePrice, format: .number.precision(.fractionLength(2)))")
-                            .font(.subheadline)
-                        
+                        // Show only profit, ROI %, and sale date for archived items
                         if let profit = product.profit {
                             Text("\(profit >= 0 ? "+" : "")$\(profit, format: .number.precision(.fractionLength(2)))")
                                 .font(.subheadline)
-                                .foregroundColor(profit >= 0 ? .green : .red)
+                                .foregroundColor(profit >= 0 ? .softGreen : .softRed)
                             
                             if let roi = product.roi {
                                 Text("(\(roi >= 0 ? "+" : "")\(roi, specifier: "%.1f")%)")
                                     .font(.subheadline)
-                                    .foregroundColor(roi >= 0 ? .green : .red)
+                                    .foregroundColor(roi >= 0 ? .softGreen : .softRed)
                             }
                         }
+                        
+                        // Show sale date if available, otherwise show purchase date
+                        if let saleDate = product.saleDate {
+                            Text("\(saleDate, format: .dateTime.month().day().year())")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text("\(product.purchaseDate, format: .dateTime.month().day().year())")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
                     } else {
+                        // Show buy price and purchase date for inventory items
+                        Text("Buy: $\(product.buyPrice, format: .number.precision(.fractionLength(2)))")
+                            .font(.subheadline)
+                        
                         Text("\(product.purchaseDate, format: .dateTime.month().day().year())")
                             .font(.caption)
                             .foregroundColor(.secondary)

@@ -18,6 +18,7 @@ struct EditSealedProductView: View {
     @State private var expansion: String
     @State private var buyPrice: String
     @State private var salePrice: String
+    @State private var saleDate: Date
     @State private var purchaseDate: Date
     
     init(product: SealedProduct) {
@@ -26,6 +27,7 @@ struct EditSealedProductView: View {
         _expansion = State(initialValue: product.expansion ?? "")
         _buyPrice = State(initialValue: String(format: "%.2f", product.buyPrice))
         _salePrice = State(initialValue: product.salePrice != nil ? String(format: "%.2f", product.salePrice!) : "")
+        _saleDate = State(initialValue: product.saleDate ?? Date())
         _purchaseDate = State(initialValue: product.purchaseDate)
     }
     
@@ -60,6 +62,10 @@ struct EditSealedProductView: View {
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .frame(width: 100)
+                    }
+                    
+                    if !salePrice.isEmpty && Double(salePrice) != nil {
+                        DatePicker("Sale Date", selection: $saleDate, displayedComponents: .date)
                     }
                     
                     if let buyPriceValue = Double(buyPrice),
@@ -106,7 +112,16 @@ struct EditSealedProductView: View {
         product.name = name
         product.expansion = expansion.isEmpty ? nil : expansion
         product.buyPrice = buyPriceValue
-        product.salePrice = salePrice.isEmpty ? nil : Double(salePrice)
+        
+        // Handle sale price and sale date
+        if salePrice.isEmpty {
+            product.salePrice = nil
+            product.saleDate = nil
+        } else if let salePriceValue = Double(salePrice) {
+            product.salePrice = salePriceValue
+            product.saleDate = saleDate
+        }
+        
         product.purchaseDate = purchaseDate
         
         do {

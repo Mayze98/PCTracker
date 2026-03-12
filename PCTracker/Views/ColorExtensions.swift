@@ -16,22 +16,22 @@ extension Color {
     /// - Returns: The color to use for the condition badge
     static func conditionColor(for condition: String, isGraded: Bool) -> Color {
         if isGraded {
-            return .blue
+            return Color(red: 0.4, green: 0.6, blue: 0.9) // Soft blue
         }
         
         switch condition.uppercased() {
         case "M", "NM":
-            return .green
+            return Color(red: 0.4, green: 0.8, blue: 0.5) // Soft green
         case "LP":
-            return Color(red: 0, green: 0.5, blue: 0) // Dark green
+            return Color(red: 0.3, green: 0.7, blue: 0.4) // Muted green
         case "MP":
-            return .yellow
+            return Color(red: 0.9, green: 0.8, blue: 0.4) // Soft yellow
         case "HP":
-            return .orange
+            return Color(red: 0.9, green: 0.7, blue: 0.4) // Soft orange
         case "DMG":
-            return .red
+            return Color(red: 0.9, green: 0.5, blue: 0.5) // Soft red
         default:
-            return .gray
+            return Color(red: 0.6, green: 0.6, blue: 0.6) // Soft gray
         }
     }
     
@@ -47,11 +47,34 @@ extension Color {
         })
     }
     
+    // Soft, subtle colors for profit/loss
+    static var softGreen: Color {
+        Color(red: 0.4, green: 0.8, blue: 0.5)
+    }
+    
+    static var softRed: Color {
+        Color(red: 0.9, green: 0.5, blue: 0.5)
+    }
+    
+    static var softBlue: Color {
+        Color(red: 0.5, green: 0.7, blue: 0.95)
+    }
+    
+    static var softYellow: Color {
+        Color(red: 0.95, green: 0.85, blue: 0.4)
+    }
+    
+    static var softOrange: Color {
+        Color(red: 0.95, green: 0.7, blue: 0.4)
+    }
 }
 
 // Fallback if asset doesn't exist - creates adaptive color programmatically
 extension Color {
     static var adaptiveBlueOrange: Color {
-        Color.adaptive(light: .blue, dark: .orange)
+        Color.adaptive(
+            light: Color(red: 0.5, green: 0.7, blue: 0.95), // Soft blue
+            dark: Color(red: 0.95, green: 0.7, blue: 0.4)   // Soft orange
+        )
     }
 }

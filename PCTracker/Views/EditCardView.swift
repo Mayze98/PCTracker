@@ -20,6 +20,7 @@ struct EditCardView: View {
     @State private var condition: String
     @State private var buyPrice: String
     @State private var salePrice: String
+    @State private var saleDate: Date
     @State private var purchaseDate: Date
     
     init(card: Cards) {
@@ -30,6 +31,7 @@ struct EditCardView: View {
         _condition = State(initialValue: card.condition)
         _buyPrice = State(initialValue: String(format: "%.2f", card.buyPrice))
         _salePrice = State(initialValue: card.salePrice != nil ? String(format: "%.2f", card.salePrice!) : "")
+        _saleDate = State(initialValue: card.saleDate ?? Date())
         _purchaseDate = State(initialValue: card.purchaseDate)
     }
     
@@ -81,6 +83,10 @@ struct EditCardView: View {
                             .frame(width: 100)
                     }
                     
+                    if !salePrice.isEmpty && Double(salePrice) != nil {
+                        DatePicker("Sale Date", selection: $saleDate, displayedComponents: .date)
+                    }
+                    
                     if let buyPriceValue = Double(buyPrice),
                        let salePriceValue = Double(salePrice),
                        salePriceValue > 0 {
@@ -127,7 +133,16 @@ struct EditCardView: View {
         card.graded = graded
         card.condition = graded ? "GRADED" : condition
         card.buyPrice = buyPriceValue
-        card.salePrice = salePrice.isEmpty ? nil : Double(salePrice)
+        
+        // Handle sale price and sale date
+        if salePrice.isEmpty {
+            card.salePrice = nil
+            card.saleDate = nil
+        } else if let salePriceValue = Double(salePrice) {
+            card.salePrice = salePriceValue
+            card.saleDate = saleDate
+        }
+        
         card.purchaseDate = purchaseDate
         
         do {

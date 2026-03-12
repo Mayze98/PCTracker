@@ -17,15 +17,17 @@ class Cards {
     var condition: String  // Store condition as simple String
     var buyPrice: Double
     var salePrice: Double?
+    var saleDate: Date?
     var purchaseDate: Date
     
-    init(name: String, number: String? = nil, graded: Bool = false, condition: String = "NM", buyPrice: Double, salePrice: Double? = nil, purchaseDate: Date = Date()) {
+    init(name: String, number: String? = nil, graded: Bool = false, condition: String = "NM", buyPrice: Double, salePrice: Double? = nil, saleDate: Date? = nil, purchaseDate: Date = Date()) {
         self.name = name
         self.number = number
         self.graded = graded
         self.condition = condition
         self.buyPrice = buyPrice
         self.salePrice = salePrice
+        self.saleDate = saleDate
         self.purchaseDate = purchaseDate
     }
     
@@ -56,13 +58,15 @@ class SealedProduct {
     var expansion: String?
     var buyPrice: Double
     var salePrice: Double?
+    var saleDate: Date?
     var purchaseDate: Date
     
-    init(name: String, expansion: String, buyPrice: Double, salePrice: Double? = nil, purchaseDate: Date = Date()) {
+    init(name: String, expansion: String, buyPrice: Double, salePrice: Double? = nil, saleDate: Date? = nil, purchaseDate: Date = Date()) {
         self.name = name
         self.expansion = expansion
         self.buyPrice = buyPrice
         self.salePrice = salePrice
+        self.saleDate = saleDate
         self.purchaseDate = purchaseDate
     }
     

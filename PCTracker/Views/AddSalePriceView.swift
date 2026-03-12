@@ -15,6 +15,7 @@ struct AddSalePriceView: View {
     
     let item: SellableItem
     @State private var salePrice: String = ""
+    @State private var saleDate: Date = Date()
     @State private var showError: Bool = false
     
     enum SellableItem {
@@ -63,13 +64,15 @@ struct AddSalePriceView: View {
                     .padding(.vertical, 4)
                 }
                 
-                Section("Sale Price") {
+                Section("Sale Information") {
                     HStack {
                         Text("$")
                             .foregroundColor(.secondary)
                         TextField("0.00", text: $salePrice)
                             .keyboardType(.decimalPad)
                     }
+                    
+                    DatePicker("Sale Date", selection: $saleDate, displayedComponents: .date)
                     
                     if let price = Double(salePrice), price > 0 {
                         let profit = price - item.buyPrice
@@ -118,8 +121,10 @@ struct AddSalePriceView: View {
         switch item {
         case .card(let card):
             card.salePrice = price
+            card.saleDate = saleDate
         case .product(let product):
             product.salePrice = price
+            product.saleDate = saleDate
         }
         
         // Save context

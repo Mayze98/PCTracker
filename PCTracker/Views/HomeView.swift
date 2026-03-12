@@ -78,17 +78,21 @@ struct HomeView: View {
         let calendar = Calendar.current
         var monthlyProfits: [Date: Double] = [:]
         
-        // Group sold cards by month
+        // Group sold cards by month (using sale date)
         for card in soldCards {
             guard let profit = card.profit else { continue }
-            let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: card.purchaseDate))!
+            // Use saleDate if available, otherwise fall back to purchaseDate
+            let dateToUse = card.saleDate ?? card.purchaseDate
+            let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: dateToUse))!
             monthlyProfits[monthStart, default: 0] += profit
         }
         
-        // Group sold products by month
+        // Group sold products by month (using sale date)
         for product in soldSealedProducts {
             guard let profit = product.profit else { continue }
-            let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: product.purchaseDate))!
+            // Use saleDate if available, otherwise fall back to purchaseDate
+            let dateToUse = product.saleDate ?? product.purchaseDate
+            let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: dateToUse))!
             monthlyProfits[monthStart, default: 0] += profit
         }
         
@@ -100,6 +104,121 @@ struct HomeView: View {
         
         return monthlyProfits.map { ProfitByMonth(month: $0.key, profit: $0.value) }
             .sorted { $0.month < $1.month }
+    }
+    
+    
+    private var cardsMonthChange: String {
+        let calendar = Calendar.current
+        let now = Date()
+        let currentMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
+        
+        // Count items added in current month
+        let count = inventoryCards.filter { calendar.isDate($0.purchaseDate, equalTo: currentMonth, toGranularity: .month) }.count
+        
+        let sign = count > 0 ? "+" : ""
+        return "\(sign)\(count)"
+    }
+    
+    private var sealedMonthChange: String {
+        let calendar = Calendar.current
+        let now = Date()
+        let currentMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
+        
+        // Count items added in current month
+        let count = inventorySealedProducts.filter { calendar.isDate($0.purchaseDate, equalTo: currentMonth, toGranularity: .month) }.count
+        
+        let sign = count > 0 ? "+" : ""
+        return "\(sign)\(count)"
+    }
+    
+    private var inventoryMonthChange: String {
+        let calendar = Calendar.current
+        let now = Date()
+        let currentMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
+        
+        // Calculate value added in current month
+        var value: Double = 0
+        for card in inventoryCards {
+            if calendar.isDate(card.purchaseDate, equalTo: currentMonth, toGranularity: .month) {
+                value += card.buyPrice
+            }
+        }
+        for product in inventorySealedProducts {
+            if calendar.isDate(product.purchaseDate, equalTo: currentMonth, toGranularity: .month) {
+                value += product.buyPrice
+            }
+        }
+        
+        let sign = value > 0 ? "+" : ""
+        return "\(sign)$\(String(format: "%.1f", value))"
+    }
+    
+    private var netProfitMonthChange: String {
+        let calendar = Calendar.current
+        let now = Date()
+        let currentMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
+        
+        // Calculate profit earned in current month (based on sale date)
+        var profit: Double = 0
+        for card in soldCards {
+            // Use saleDate if available, otherwise fall back to purchaseDate
+            let dateToCheck = card.saleDate ?? card.purchaseDate
+            if calendar.isDate(dateToCheck, equalTo: currentMonth, toGranularity: .month) {
+                profit += (card.profit ?? 0)
+            }
+        }
+        for product in soldSealedProducts {
+            // Use saleDate if available, otherwise fall back to purchaseDate
+            let dateToCheck = product.saleDate ?? product.purchaseDate
+            if calendar.isDate(dateToCheck, equalTo: currentMonth, toGranularity: .month) {
+                profit += (product.profit ?? 0)
+            }
+        }
+        for expense in miscExpenses {
+            if calendar.isDate(expense.purchaseDate, equalTo: currentMonth, toGranularity: .month) {
+                profit -= expense.cost
+            }
+        }
+        
+        let sign = profit > 0 ? "+" : ""
+        return "\(sign)$\(String(format: "%.1f", profit))"
+    }
+    
+    private var yearToDateROI: String {
+        let calendar = Calendar.current
+        let now = Date()
+        let startOfYear = calendar.date(from: calendar.dateComponents([.year], from: now))!
+        
+        var ytdSales: Double = 0
+        var ytdExpenses: Double = 0
+        
+        // Use sale date for sold cards
+        for card in soldCards {
+            let dateToCheck = card.saleDate ?? card.purchaseDate
+            if dateToCheck >= startOfYear {
+                ytdSales += (card.salePrice ?? 0)
+                ytdExpenses += card.buyPrice
+            }
+        }
+        
+        // Use sale date for sold products
+        for product in soldSealedProducts {
+            let dateToCheck = product.saleDate ?? product.purchaseDate
+            if dateToCheck >= startOfYear {
+                ytdSales += (product.salePrice ?? 0)
+                ytdExpenses += product.buyPrice
+            }
+        }
+        
+        for expense in miscExpenses where expense.purchaseDate >= startOfYear {
+            ytdExpenses += expense.cost
+        }
+        
+        if ytdExpenses > 0 {
+            let roi = ((ytdSales - ytdExpenses) / ytdExpenses) * 100
+            return String(format: "%.2f%%", roi)
+        }
+        return "0.00%"
     }
     
     
@@ -127,39 +246,49 @@ struct HomeView: View {
             VStack(spacing: 12) {
                 HStack(spacing: 12) {
                     // Total Cards
-                    StatCard(
+                    FlippableStatCard(
                         icon: "lanyardcard",
-                        iconColor: .blue,
+                        iconColor: .softOrange,
                         title: "Cards",
                         value: "\(inventoryCards.count)",
+                        backTitle: "Monthly",
+                        backValue: cardsMonthChange,
+                        backIcon: "calendar",
                         valueFontSize: 18
                     )
                     // Sealed
-                    StatCard(
+                    FlippableStatCard(
                         icon: "cube.box",
-                        iconColor: .yellow,
+                        iconColor: .softOrange,
                         title: "Sealed",
                         value: "\(inventorySealedProducts.count)",
+                        backTitle: "Monthly",
+                        backValue: sealedMonthChange,
+                        backIcon: "calendar",
                         valueFontSize: 18
                     )
-
-
                 }
                 HStack(spacing: 12) {
                     // Inventory
-                    StatCard(
+                    FlippableStatCard(
                         icon: "storefront",
-                        iconColor: .orange,
+                        iconColor: .softOrange,
                         title: "Inventory",
                         value: String(format: "$%.1f", totalCards + totalProducts),
+                        backTitle: "Monthly",
+                        backValue: inventoryMonthChange,
+                        backIcon: "calendar",
                         valueFontSize: 18
                     )
                     // Profit
-                    StatCard(
+                    FlippableStatCard(
                         icon: "dollarsign",
-                        iconColor: .green,
+                        iconColor: .softOrange,
                         title: "Net Profit",
                         value: String(format: "$%.1f", totalProfit - expenseCost),
+                        backTitle: "Monthly",
+                        backValue: netProfitMonthChange,
+                        backIcon: "calendar",
                         valueFontSize: 18
                     )
                 }
@@ -167,11 +296,15 @@ struct HomeView: View {
             .padding(.horizontal)
             
             HStack {
-                StatCard(
+                FlippableStatCard(
                     icon: "chart.line.uptrend.xyaxis",
-                    iconColor: .green,
+                    iconColor: .softGreen,
                     title: "Return on Investment",
-                    value: totalExpenses > 0 ? String(format: "%.2f%%", ((totalSales - totalExpenses)/totalExpenses) * 100) : "0.00%"
+                    value: totalExpenses > 0 ? String(format: "%.2f%%", ((totalSales - totalExpenses)/totalExpenses) * 100) : "0.00%",
+                    backTitle: "YTD ROI",
+                    backValue: yearToDateROI,
+                    backIcon: "calendar.badge.clock",
+                    valueFontSize: 28
                 )
             }
             .padding(.horizontal)
@@ -200,7 +333,7 @@ struct HomeView: View {
                             x: .value("Month", item.month, unit: .month),
                             y: .value("Profit", item.profit)
                         )
-                        .foregroundStyle(item.profit >= 0 ? Color.green : Color.red)
+                        .foregroundStyle(item.profit >= 0 ? Color.softGreen : Color.softRed)
                         .cornerRadius(6)
                         .opacity(selectedMonth == nil || Calendar.current.isDate(selectedMonth!, equalTo: item.month, toGranularity: .month) ? 1.0 : 0.3)
                     }
@@ -237,7 +370,7 @@ struct HomeView: View {
                                     .foregroundColor(.secondary)
                                 Text(selectedData.profit >= 0 ? "+$\(selectedData.profit, specifier: "%.2f")" : "-$\(abs(selectedData.profit), specifier: "%.2f")")
                                     .font(.system(size: 18, weight: .bold))
-                                    .foregroundColor(selectedData.profit >= 0 ? .green : .red)
+                                    .foregroundColor(selectedData.profit >= 0 ? .softGreen : .softRed)
                             }
                         }
                         .padding()

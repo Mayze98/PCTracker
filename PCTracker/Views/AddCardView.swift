@@ -162,6 +162,7 @@ struct AddCardFormView: View {
     @State private var salePrice: String = ""
     @State private var hasSalePrice: Bool = false
     @State private var purchaseDate: Date = Date()
+    @State private var saleDate: Date = Date()
     
     let conditions = ["NM", "LP", "MP", "HP", "DMG"]
     
@@ -221,6 +222,8 @@ struct AddCardFormView: View {
                                 .multilineTextAlignment(.trailing)
                                 .frame(maxWidth: 100)
                         }
+                        
+                        DatePicker("Sale Date", selection: $saleDate, displayedComponents: .date)
                     }
                 }
             }
@@ -286,6 +289,7 @@ struct AddCardFormView: View {
             condition: condition,
             buyPrice: buyPriceValue,
             salePrice: salePriceValue,
+            saleDate: (hasSalePrice && salePriceValue != nil) ? saleDate : nil,
             purchaseDate: purchaseDate
         )
         
@@ -313,6 +317,7 @@ struct AddSealedFormView: View {
     @State private var salePrice: String = ""
     @State private var hasSalePrice: Bool = false
     @State private var purchaseDate: Date = Date()
+    @State private var saleDate: Date = Date()
     @State private var showingAlert = false
     @State private var alertMessage = ""
     
@@ -355,6 +360,8 @@ struct AddSealedFormView: View {
                                 .multilineTextAlignment(.trailing)
                                 .frame(maxWidth: 100)
                         }
+                        
+                        DatePicker("Sale Date", selection: $saleDate, displayedComponents: .date)
                     }
                 }
             }
@@ -415,6 +422,7 @@ struct AddSealedFormView: View {
             expansion: expansion.trimmingCharacters(in: .whitespaces),
             buyPrice: buyPriceValue,
             salePrice: salePriceValue,
+            saleDate: (hasSalePrice && salePriceValue != nil) ? saleDate : nil,
             purchaseDate: purchaseDate
         )
         
