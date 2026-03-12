@@ -32,14 +32,24 @@ struct InventoryCardRow: View {
                     Text(card.name)
                         .font(.headline)
                     Spacer()
-                    let conditionColor = Color.conditionColor(for: card.condition, isGraded: card.graded)
-                    Text(card.graded ? "GRADED" : card.condition)
-                        .font(.caption2)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(conditionColor.opacity(0.2))
-                        .foregroundColor(conditionColor)
-                        .cornerRadius(4)
+                    if card.graded {
+                        Text("GRADED")
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Color.adaptiveBlueOrange.opacity(0.2))
+                            .foregroundColor(.adaptiveBlueOrange)
+                            .cornerRadius(4)
+                    } else {
+                        let conditionColor = Color.conditionColor(for: card.condition, isGraded: false)
+                        Text(card.condition)
+                            .font(.caption2)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(conditionColor.opacity(0.2))
+                            .foregroundColor(conditionColor)
+                            .cornerRadius(4)
+                    }
                 }
                 
                 if let number = card.number {
@@ -49,17 +59,17 @@ struct InventoryCardRow: View {
                 }
                 
                 HStack {
-                    if showProfit, let salePrice = card.salePrice {
+                    if showProfit, card.salePrice != nil {
                         // Show only profit, ROI %, and sale date for archived items
                         if let profit = card.profit {
                             Text("\(profit >= 0 ? "+" : "")$\(profit, format: .number.precision(.fractionLength(2)))")
                                 .font(.subheadline)
-                                .foregroundColor(profit >= 0 ? .softGreen : .softRed)
+                                .foregroundColor(profit >= 0 ? .green : .red)
                             
                             if let roi = card.roi {
                                 Text("(\(roi >= 0 ? "+" : "")\(roi, specifier: "%.1f")%)")
                                     .font(.subheadline)
-                                    .foregroundColor(roi >= 0 ? .softGreen : .softRed)
+                                    .foregroundColor(roi >= 0 ? .green : .red)
                             }
                         }
                         
@@ -136,17 +146,17 @@ struct InventorySealedProductRow: View {
                 }
                 
                 HStack {
-                    if showProfit, let salePrice = product.salePrice {
+                    if showProfit, product.salePrice != nil {
                         // Show only profit, ROI %, and sale date for archived items
                         if let profit = product.profit {
                             Text("\(profit >= 0 ? "+" : "")$\(profit, format: .number.precision(.fractionLength(2)))")
                                 .font(.subheadline)
-                                .foregroundColor(profit >= 0 ? .softGreen : .softRed)
+                                .foregroundColor(profit >= 0 ? .green : .red)
                             
                             if let roi = product.roi {
                                 Text("(\(roi >= 0 ? "+" : "")\(roi, specifier: "%.1f")%)")
                                     .font(.subheadline)
-                                    .foregroundColor(roi >= 0 ? .softGreen : .softRed)
+                                    .foregroundColor(roi >= 0 ? .green : .red)
                             }
                         }
                         

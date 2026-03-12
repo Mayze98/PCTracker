@@ -248,7 +248,7 @@ struct HomeView: View {
                     // Total Cards
                     FlippableStatCard(
                         icon: "lanyardcard",
-                        iconColor: .softOrange,
+                        iconColor: .adaptiveBlueOrange,
                         title: "Cards",
                         value: "\(inventoryCards.count)",
                         backTitle: "Monthly",
@@ -259,7 +259,7 @@ struct HomeView: View {
                     // Sealed
                     FlippableStatCard(
                         icon: "cube.box",
-                        iconColor: .softOrange,
+                        iconColor: .adaptiveBlueOrange,
                         title: "Sealed",
                         value: "\(inventorySealedProducts.count)",
                         backTitle: "Monthly",
@@ -272,7 +272,7 @@ struct HomeView: View {
                     // Inventory
                     FlippableStatCard(
                         icon: "storefront",
-                        iconColor: .softOrange,
+                        iconColor: .adaptiveBlueOrange,
                         title: "Inventory",
                         value: String(format: "$%.1f", totalCards + totalProducts),
                         backTitle: "Monthly",
@@ -283,7 +283,7 @@ struct HomeView: View {
                     // Profit
                     FlippableStatCard(
                         icon: "dollarsign",
-                        iconColor: .softOrange,
+                        iconColor: .adaptiveBlueOrange,
                         title: "Net Profit",
                         value: String(format: "$%.1f", totalProfit - expenseCost),
                         backTitle: "Monthly",
@@ -298,7 +298,7 @@ struct HomeView: View {
             HStack {
                 FlippableStatCard(
                     icon: "chart.line.uptrend.xyaxis",
-                    iconColor: .softGreen,
+                    iconColor: .green,
                     title: "Return on Investment",
                     value: totalExpenses > 0 ? String(format: "%.2f%%", ((totalSales - totalExpenses)/totalExpenses) * 100) : "0.00%",
                     backTitle: "YTD ROI",
@@ -333,7 +333,7 @@ struct HomeView: View {
                             x: .value("Month", item.month, unit: .month),
                             y: .value("Profit", item.profit)
                         )
-                        .foregroundStyle(item.profit >= 0 ? Color.softGreen : Color.softRed)
+                        .foregroundStyle(item.profit >= 0 ? Color(red: 0.4, green: 0.8, blue: 0.5) : Color(red: 0.9, green: 0.5, blue: 0.5))
                         .cornerRadius(6)
                         .opacity(selectedMonth == nil || Calendar.current.isDate(selectedMonth!, equalTo: item.month, toGranularity: .month) ? 1.0 : 0.3)
                     }
@@ -370,7 +370,7 @@ struct HomeView: View {
                                     .foregroundColor(.secondary)
                                 Text(selectedData.profit >= 0 ? "+$\(selectedData.profit, specifier: "%.2f")" : "-$\(abs(selectedData.profit), specifier: "%.2f")")
                                     .font(.system(size: 18, weight: .bold))
-                                    .foregroundColor(selectedData.profit >= 0 ? .softGreen : .softRed)
+                                    .foregroundColor(selectedData.profit >= 0 ? .green : .red)
                             }
                         }
                         .padding()
