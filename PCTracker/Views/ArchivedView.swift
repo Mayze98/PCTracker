@@ -94,10 +94,11 @@ struct ArchivedView: View {
             }
         }
         
-        // Apply date range filter
+        // Apply date range filter (using saleDate)
         if useDateFilter {
             soldCards = soldCards.filter { card in
-                card.purchaseDate >= startDate && card.purchaseDate <= endDate
+                let dateToCheck = card.saleDate ?? card.purchaseDate
+                return dateToCheck >= startDate && dateToCheck <= endDate
             }
         }
         
@@ -169,10 +170,11 @@ struct ArchivedView: View {
             }
         }
         
-        // Apply date range filter
+        // Apply date range filter (using saleDate)
         if useDateFilter {
             soldProducts = soldProducts.filter { product in
-                product.purchaseDate >= startDate && product.purchaseDate <= endDate
+                let dateToCheck = product.saleDate ?? product.purchaseDate
+                return dateToCheck >= startDate && dateToCheck <= endDate
             }
         }
         

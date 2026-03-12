@@ -63,7 +63,8 @@ struct HomeView: View {
     private var totalProfit: Double {
         let cardsProfit = soldCards.reduce(0.0) { $0 + ($1.profit ?? 0) }
         let productsProfit = soldSealedProducts.reduce(0.0) { $0 + ($1.profit ?? 0) }
-        return cardsProfit + productsProfit
+        let expensesCost = miscExpenses.reduce(0.0) { $0 + $1.cost }
+        return cardsProfit + productsProfit - expensesCost
     }
     
     private var totalExpenses: Double {
@@ -110,10 +111,13 @@ struct HomeView: View {
     private var cardsMonthChange: String {
         let calendar = Calendar.current
         let now = Date()
-        let currentMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
         
-        // Count items added in current month
-        let count = inventoryCards.filter { calendar.isDate($0.purchaseDate, equalTo: currentMonth, toGranularity: .month) }.count
+        // Get start of current month and end of today
+        let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
+        let endOfToday = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: now)!
+        
+        // Count items added in current month to date
+        let count = inventoryCards.filter { $0.purchaseDate >= startOfMonth && $0.purchaseDate <= endOfToday }.count
         
         let sign = count > 0 ? "+" : ""
         return "\(sign)\(count)"
@@ -122,10 +126,13 @@ struct HomeView: View {
     private var sealedMonthChange: String {
         let calendar = Calendar.current
         let now = Date()
-        let currentMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
         
-        // Count items added in current month
-        let count = inventorySealedProducts.filter { calendar.isDate($0.purchaseDate, equalTo: currentMonth, toGranularity: .month) }.count
+        // Get start of current month and end of today
+        let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
+        let endOfToday = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: now)!
+        
+        // Count items added in current month to date
+        let count = inventorySealedProducts.filter { $0.purchaseDate >= startOfMonth && $0.purchaseDate <= endOfToday }.count
         
         let sign = count > 0 ? "+" : ""
         return "\(sign)\(count)"
@@ -134,17 +141,20 @@ struct HomeView: View {
     private var inventoryMonthChange: String {
         let calendar = Calendar.current
         let now = Date()
-        let currentMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
         
-        // Calculate value added in current month
+        // Get start of current month and end of today
+        let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
+        let endOfToday = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: now)!
+        
+        // Calculate value added in current month to date
         var value: Double = 0
         for card in inventoryCards {
-            if calendar.isDate(card.purchaseDate, equalTo: currentMonth, toGranularity: .month) {
+            if card.purchaseDate >= startOfMonth && card.purchaseDate <= endOfToday {
                 value += card.buyPrice
             }
         }
         for product in inventorySealedProducts {
-            if calendar.isDate(product.purchaseDate, equalTo: currentMonth, toGranularity: .month) {
+            if product.purchaseDate >= startOfMonth && product.purchaseDate <= endOfToday {
                 value += product.buyPrice
             }
         }
@@ -156,26 +166,29 @@ struct HomeView: View {
     private var netProfitMonthChange: String {
         let calendar = Calendar.current
         let now = Date()
-        let currentMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
         
-        // Calculate profit earned in current month (based on sale date)
+        // Get start of current month and today (end of day)
+        let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
+        let endOfToday = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: now)!
+        
+        // Calculate profit earned in current month to date (based on sale date)
         var profit: Double = 0
         for card in soldCards {
             // Use saleDate if available, otherwise fall back to purchaseDate
             let dateToCheck = card.saleDate ?? card.purchaseDate
-            if calendar.isDate(dateToCheck, equalTo: currentMonth, toGranularity: .month) {
+            if dateToCheck >= startOfMonth && dateToCheck <= endOfToday {
                 profit += (card.profit ?? 0)
             }
         }
         for product in soldSealedProducts {
             // Use saleDate if available, otherwise fall back to purchaseDate
             let dateToCheck = product.saleDate ?? product.purchaseDate
-            if calendar.isDate(dateToCheck, equalTo: currentMonth, toGranularity: .month) {
+            if dateToCheck >= startOfMonth && dateToCheck <= endOfToday {
                 profit += (product.profit ?? 0)
             }
         }
         for expense in miscExpenses {
-            if calendar.isDate(expense.purchaseDate, equalTo: currentMonth, toGranularity: .month) {
+            if expense.purchaseDate >= startOfMonth && expense.purchaseDate <= endOfToday {
                 profit -= expense.cost
             }
         }
@@ -285,7 +298,7 @@ struct HomeView: View {
                         icon: "dollarsign",
                         iconColor: .adaptiveBlueOrange,
                         title: "Net Profit",
-                        value: String(format: "$%.1f", totalProfit - expenseCost),
+                        value: String(format: "$%.1f", totalProfit),
                         backTitle: "Monthly",
                         backValue: netProfitMonthChange,
                         backIcon: "calendar",

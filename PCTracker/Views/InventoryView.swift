@@ -144,6 +144,11 @@ struct InventoryView: View {
             inventoryProducts = []
         }
         
+        // Apply date range filter
+        if let dateRange = filterDateRange {
+            inventoryProducts = inventoryProducts.filter { dateRange.contains($0.purchaseDate) }
+        }
+        
         // Apply price filter
         if usePriceFilter {
             inventoryProducts = inventoryProducts.filter { product in
