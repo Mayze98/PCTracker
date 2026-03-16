@@ -90,11 +90,13 @@ class CSVExporter {
 
 // MARK: - Settings View
 struct SettingsView: View {
+    @Binding var selectedTab: Int
+    
     @Query private var allCards: [Cards]
     @Query private var allSealedProducts: [SealedProduct]
     @Query private var miscExpenses: [MiscExpense]
     
-    @AppStorage("isDarkMode") private var isDarkMode: Bool = false
+    @AppStorage("isDarkMode") private var isDarkMode: Bool = true
     @State private var showingExportSheet = false
     @State private var showingShareSheet = false
     @State private var exportType: ExportType = .inventory
@@ -114,36 +116,60 @@ struct SettingsView: View {
     
     var body: some View {
         NavigationView {
-            List {
-                Section {
+            VStack(spacing: 0) {
+                // Header
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Settings")
+                        .font(.manrope(24, weight: .bold))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .padding(.top, 8)
+                .background(Color.themeBackground)
+                
+                List {
+                    Section {
                     HStack {
                         Text("User")
                         Spacer()
                         Text("Guest")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.themeSecondaryText)
                     }
+                    .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Account")
+                        .textCase(nil)
                 }
                 
-                Section("iCloud Sync") {
+                Section {
                     HStack {
                         Text("Status")
                         Spacer()
                         Text(iCloudStatus)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.themeSecondaryText)
                     }
+                    .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("iCloud Sync")
+                        .textCase(nil)
                 }
                 
-                Section("Display") {
+                Section {
                     HStack {
                         Text("Currency")
                         Spacer()
                         Text("CAD")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.themeSecondaryText)
                     }
+                    .listRowBackground(Color.themeRowBackground)
                     Toggle("Dark Mode", isOn: $isDarkMode)
+                        .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Display")
+                        .textCase(nil)
                 }
                 
-                Section("Import") {
+                Section {
                     if importInProgress {
                         HStack {
                             Spacer()
@@ -152,35 +178,60 @@ struct SettingsView: View {
                             }
                             Spacer()
                         }
+                        .listRowBackground(Color.themeRowBackground)
                     } else {
                         Button("Import CSV") {
                             showingImporter = true
                         }
+                        .foregroundColor(.themeGold)
+                        .listRowBackground(Color.themeRowBackground)
                     }
+                } header: {
+                    Text("Import")
+                        .textCase(nil)
                 }
                 
-                Section("Export") {
+                Section {
                     Button("Export Inventory to CSV") {
                         exportType = .inventory
                         generateCSV()
                     }
+                    .foregroundColor(.themeGold)
+                    .listRowBackground(Color.themeRowBackground)
                     
                     Button("Export Archive to CSV") {
                         exportType = .archive
                         generateCSV()
                     }
+                    .foregroundColor(.themeGold)
+                    .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Export")
+                        .textCase(nil)
                 }
                 
-                Section("About") {
+                Section {
                     HStack {
                         Text("Version")
                         Spacer()
                         Text("1.0.0")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.themeSecondaryText)
                     }
+                    .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("About")
+                        .textCase(nil)
                 }
+                }
+                .contentMargins(.top, 8)
+                .listSectionSpacing(12)
+                .scrollContentBackground(.hidden)
+                .background(Color.themeBackground)
+                
             }
-            .navigationTitle("Settings")
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .tint(.themeGold)
             .preferredColorScheme(isDarkMode ? .dark : .light)
             .sheet(isPresented: $showingShareSheet) {
                 ShareSheet(activityItems: [csvData])
@@ -331,7 +382,7 @@ struct ShareSheet: UIViewControllerRepresentable {
 }
 
 #Preview {
-    SettingsView()
+    SettingsView(selectedTab: .constant(4))
         .modelContainer(for: [Cards.self, SealedProduct.self, MiscExpense.self], inMemory: true)
 }
 

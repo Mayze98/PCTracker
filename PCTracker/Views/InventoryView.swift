@@ -9,6 +9,8 @@ import SwiftUI
 
 // MARK: - Inventory View
 struct InventoryView: View {
+    @Binding var selectedTab: Int
+    
     @Environment(\.modelContext) private var modelContext
     @Query private var allCards: [Cards]
     @Query private var allSealedProducts: [SealedProduct]
@@ -183,7 +185,20 @@ struct InventoryView: View {
     
     var body: some View {
         NavigationView {
-            Group {
+            VStack(spacing: 0) {
+                // Header
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Inventory")
+                        .font(.manrope(24, weight: .bold))
+                    Text("$\(totalCards + totalProducts, format: .number.precision(.fractionLength(2)))")
+                        .font(.manrope(15, weight: .medium))
+                        .foregroundColor(.themeSecondaryText)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .padding(.top, 8)
+                .background(Color.themeBackground)
+                
                 if !hasAnyItems {
                     EmptyStateView(
                         icon: "cube.box",
@@ -191,7 +206,32 @@ struct InventoryView: View {
                         subtitle: "Add items to get started"
                     )
                 } else {
+                    ScrollViewReader { scrollProxy in
+                    ZStack(alignment: .bottomTrailing) {
                     List {
+                        // Search
+
+                        Section {
+                            HStack {
+                                Image(systemName: "magnifyingglass")
+                                    .foregroundColor(.themeSecondaryText)
+                                TextField("Search inventory", text: $searchText)
+                                    .font(.manrope(.body))
+                                if !searchText.isEmpty {
+                                    Button {
+                                        searchText = ""
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .foregroundColor(.themeSecondaryText)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .listRowBackground(Color.themeRowBackground)
+                        }
+                        .id("inventoryTop")
+
+                        
                         // Action Buttons
                         Section {
                             HStack(spacing: 12) {
@@ -203,8 +243,8 @@ struct InventoryView: View {
                                     HStack {
                                         Image(systemName: "checkmark.circle")
                                         Text("Select")
+                                            .font(.manrope(.subheadline, weight: .medium))
                                     }
-                                    .font(.subheadline)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 10)
                                     .background(Color.adaptiveBlueOrange.opacity(0.1))
@@ -219,9 +259,10 @@ struct InventoryView: View {
                                     HStack {
                                         Image(systemName: "line.3.horizontal.decrease.circle")
                                         Text("Filter")
+                                            .font(.manrope(.subheadline, weight: .medium))
                                         if activeFilterCount > 0 {
                                             Text("\(activeFilterCount)")
-                                                .font(.caption2)
+                                                .font(.manrope(.caption2, weight: .bold))
                                                 .foregroundColor(.white)
                                                 .padding(.horizontal, 6)
                                                 .padding(.vertical, 2)
@@ -229,7 +270,6 @@ struct InventoryView: View {
                                                 .clipShape(Capsule())
                                         }
                                     }
-                                    .font(.subheadline)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 10)
                                     .background(Color.adaptiveBlueOrange.opacity(0.1))
@@ -268,8 +308,8 @@ struct InventoryView: View {
                                     HStack {
                                         Image(systemName: "arrow.up.arrow.down")
                                         Text("Sort")
+                                            .font(.manrope(.subheadline, weight: .medium))
                                     }
-                                    .font(.subheadline)
                                     .frame(maxWidth: .infinity)
                                     .padding(.vertical, 10)
                                     .background(Color.adaptiveBlueOrange.opacity(0.1))
@@ -289,7 +329,7 @@ struct InventoryView: View {
                         
                         // Cards Section
                         if !cards.isEmpty {
-                            Section("Cards") {
+                            Section {
                                 ForEach(cards) { card in
                                     InventoryCardRow(
                                         card: card,
@@ -314,13 +354,17 @@ struct InventoryView: View {
                                             selectedCard = card
                                         }
                                     )
+                                    .listRowBackground(Color.themeRowBackground)
                                 }
+                            } header: {
+                                Text("Cards")
+                                    .textCase(nil)
                             }
                         }
                         
                         // Sealed Products Section
                         if !sealedProducts.isEmpty {
-                            Section("Sealed Products") {
+                            Section {
                                 ForEach(sealedProducts) { product in
                                     InventorySealedProductRow(
                                         product: product,
@@ -345,14 +389,63 @@ struct InventoryView: View {
                                             selectedProduct = product
                                         }
                                     )
+                                    .listRowBackground(Color.themeRowBackground)
                                 }
+                            } header: {
+                                Text("Sealed Products")
+                                    .textCase(nil)
                             }
                         }
                     }
+                    .contentMargins(.top, 8)
+                    .listSectionSpacing(12)
+                    .scrollContentBackground(.hidden)
+                    .background(Color.themeBackground)
+                    .onChange(of: selectedTab) { _, _ in
+                        searchText = ""
+                        isMultiSelectMode = false
+                        selectedCards.removeAll()
+                        selectedProducts.removeAll()
+                        showingFilters = false
+                        filterItemType = [.cards, .sealedProducts]
+                        filterConditions = []
+                        filterGradedOnly = false
+                        filterDateRange = nil
+                        usePriceFilter = false
+                        minPrice = 0
+                        maxPrice = 1000
+                        sortOption = .date
+                        sortAscending = false
+                    }
+                    
+                    // Scroll to top button
+                    Button {
+                        withAnimation {
+                            scrollProxy.scrollTo("inventoryTop", anchor: .top)
+                        }
+                    } label: {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundColor(.themePrimaryText)
+                            .frame(width: 44, height: 44)
+                            .background(Color.themeCardBackground)
+                            .clipShape(Circle())
+                            .shadow(color: .black.opacity(0.25), radius: 4, x: 0, y: 2)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.themeGold.opacity(0.3), lineWidth: 1)
+                            )
+                    }
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 20)
+                    } // ZStack
+                    } // ScrollViewReader
                 }
             }
-            .navigationTitle("Inventory : $\(totalCards + totalProducts, format: .number.precision(.fractionLength(2)))")
-            .searchable(text: $searchText, prompt: "Search inventory")
+            .background(Color.themeBackground)
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
+            .tint(.themeGold)
             .toolbar {
                 if isMultiSelectMode {
                     ToolbarItem(placement: .navigationBarLeading) {
@@ -367,8 +460,8 @@ struct InventoryView: View {
                     
                     ToolbarItem(placement: .status) {
                         Text("\(selectedCards.count + selectedProducts.count) selected")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .font(.manrope(.subheadline))
+                            .foregroundColor(.themeSecondaryText)
                     }
                     
                     ToolbarItem(placement: .navigationBarTrailing) {
@@ -474,9 +567,10 @@ struct InventoryFilterView: View {
                         maxPrice = 1000
                     }
                     .foregroundColor(.red)
+                    .listRowBackground(Color.themeRowBackground)
                 }
                 
-                Section("Item Type") {
+                Section {
                     ForEach(InventoryView.ItemType.allCases) { type in
                         Toggle(type.rawValue, isOn: Binding(
                             get: { itemTypes.contains(type) },
@@ -488,10 +582,14 @@ struct InventoryFilterView: View {
                                 }
                             }
                         ))
+                        .listRowBackground(Color.themeRowBackground)
                     }
+                } header: {
+                    Text("Item Type")
+                        .textCase(nil)
                 }
                 
-                Section("Condition") {
+                Section {
                     HStack(spacing: 8) {
                         ForEach(availableConditions, id: \.self) { condition in
                             Button {
@@ -502,11 +600,11 @@ struct InventoryFilterView: View {
                                 }
                             } label: {
                                 Text(condition)
-                                    .font(.caption)
+                                    .font(.manrope(.caption, weight: .medium))
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 8)
                                     .background(filterConditions.contains(condition) ? Color.adaptiveBlueOrange : Color.gray.opacity(0.2))
-                                    .foregroundColor(filterConditions.contains(condition) ? .white : .primary)
+                                    .foregroundColor(filterConditions.contains(condition) ? .white : .themePrimaryText)
                                     .cornerRadius(8)
                             }
                             .buttonStyle(.plain)
@@ -514,21 +612,26 @@ struct InventoryFilterView: View {
                     }
                     .padding(.vertical, 4)
                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Condition")
+                        .textCase(nil)
                 }
                 
                 Section {
                     Toggle("Filter by Price Range", isOn: $usePriceFilter)
+                        .listRowBackground(Color.themeRowBackground)
                     
                     if usePriceFilter {
                         VStack(alignment: .leading, spacing: 16) {
                             HStack(spacing: 16) {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Min")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                                        .font(.manrope(.caption, weight: .medium))
+                                        .foregroundColor(.themeSecondaryText)
                                     HStack(spacing: 4) {
                                         Text("$")
-                                            .foregroundColor(.secondary)
+                                            .foregroundColor(.themeSecondaryText)
                                         TextField("0", value: $minPrice, format: .number.precision(.fractionLength(0)))
                                             .keyboardType(.numberPad)
                                             .textFieldStyle(.roundedBorder)
@@ -537,11 +640,11 @@ struct InventoryFilterView: View {
                                 
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Max")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                                        .font(.manrope(.caption, weight: .medium))
+                                        .foregroundColor(.themeSecondaryText)
                                     HStack(spacing: 4) {
                                         Text("$")
-                                            .foregroundColor(.secondary)
+                                            .foregroundColor(.themeSecondaryText)
                                         TextField("10000", value: $maxPrice, format: .number.precision(.fractionLength(0)))
                                             .keyboardType(.numberPad)
                                             .textFieldStyle(.roundedBorder)
@@ -558,6 +661,7 @@ struct InventoryFilterView: View {
                             .frame(height: 30)
                         }
                         .padding(.vertical, 8)
+                        .listRowBackground(Color.themeRowBackground)
                     }
                 }
                 
@@ -570,28 +674,35 @@ struct InventoryFilterView: View {
                                 filterDateRange = nil
                             }
                         }
+                        .listRowBackground(Color.themeRowBackground)
                     
                     if useDateFilter {
                         HStack(spacing: 12) {
                             DatePicker("", selection: $startDate, displayedComponents: .date)
                                 .labelsHidden()
+                                .environment(\.colorScheme, .dark)
                                 .onChange(of: startDate) { _, newValue in
                                     filterDateRange = newValue...endDate
                                 }
                             
                             Text("to")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.themeSecondaryText)
                             
                             DatePicker("", selection: $endDate, displayedComponents: .date)
                                 .labelsHidden()
+                                .environment(\.colorScheme, .dark)
                                 .onChange(of: endDate) { _, newValue in
                                     filterDateRange = startDate...newValue
                                 }
                         }
                         .padding(.vertical, 4)
+                        .listRowBackground(Color.themeRowBackground)
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Color.themeBackground)
+            .tint(.themeGold)
             .navigationTitle("Filters")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -613,6 +724,6 @@ struct InventoryFilterView: View {
 }
 
 #Preview {
-    InventoryView()
+    InventoryView(selectedTab: .constant(1))
         .modelContainer(for: [Cards.self, SealedProduct.self, MiscExpense.self], inMemory: true)
 }

@@ -40,15 +40,36 @@ struct EditCardView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Card Information") {
-                    TextField("Card Name", text: $name)
-                    TextField("Card Number", text: $number)
+                Section {
+                    HStack {
+                        Text("Card Name")
+                            .foregroundColor(.themePrimaryText)
+                        Spacer()
+                        TextField("", text: $name)
+                            .multilineTextAlignment(.trailing)
+                            .autocorrectionDisabled()
+                            .autocapitalization(.none)
+                    }
+                    .listRowBackground(Color.themeRowBackground)
+                    HStack {
+                        Text("Card Number")
+                            .foregroundColor(.themePrimaryText)
+                        Spacer()
+                        TextField("", text: $number)
+                            .multilineTextAlignment(.trailing)
+                            .autocorrectionDisabled()
+                            .autocapitalization(.none)
+                    }
+                    .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Card Information")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
                 }
-                .autocorrectionDisabled()
-                .autocapitalization(.none)
                 
-                Section("Condition") {
+                Section {
                     Toggle("Graded", isOn: $graded)
+                        .listRowBackground(Color.themeRowBackground)
                     
                     if !graded {
                         Picker("Condition", selection: $condition) {
@@ -57,34 +78,43 @@ struct EditCardView: View {
                             }
                         }
                         .pickerStyle(.segmented)
+                        .listRowBackground(Color.themeRowBackground)
                     }
+                } header: {
+                    Text("Condition")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
                 }
                 
-                Section("Pricing") {
+                Section {
                     HStack {
                         Text("Buy Price")
                         Spacer()
                         Text("$")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.themeSecondaryText)
                         TextField("0.00", text: $buyPrice)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .frame(width: 100)
                     }
+                    .listRowBackground(Color.themeRowBackground)
                     
                     HStack {
                         Text("Sale Price")
                         Spacer()
                         Text("$")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.themeSecondaryText)
                         TextField("Optional", text: $salePrice)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .frame(width: 100)
                     }
+                    .listRowBackground(Color.themeRowBackground)
                     
                     if !salePrice.isEmpty && Double(salePrice) != nil {
                         DatePicker("Sale Date", selection: $saleDate, displayedComponents: .date)
+                            .environment(\.colorScheme, .dark)
+                            .listRowBackground(Color.themeRowBackground)
                     }
                     
                     if let buyPriceValue = Double(buyPrice),
@@ -95,18 +125,33 @@ struct EditCardView: View {
                             Text("Profit")
                             Spacer()
                             Text("\(profit >= 0 ? "+" : "")$\(profit, format: .number.precision(.fractionLength(2)))")
-                                .foregroundColor(profit >= 0 ? .green : .red)
+                                .foregroundColor(profit >= 0 ? .themeGold : .themeLoss)
                                 .bold()
                         }
+                        .listRowBackground(Color.themeRowBackground)
                     }
+                } header: {
+                    Text("Pricing")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
                 }
                 
-                Section("Purchase Date") {
+                Section {
                     DatePicker("Date", selection: $purchaseDate, displayedComponents: .date)
+                        .environment(\.colorScheme, .dark)
+                        .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Purchase Date")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
                 }
             }
+            .foregroundColor(.themePrimaryText)
+            .scrollContentBackground(.hidden)
+            .background(Color.themeBackground)
             .navigationTitle("Edit Card")
             .navigationBarTitleDisplayMode(.inline)
+            .tint(.themeGold)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {

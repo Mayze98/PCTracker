@@ -9,6 +9,8 @@ import SwiftData
 
 // MARK: - Add Card View
 struct AddCardView: View {
+    @Binding var selectedTab: Int
+    
     @Environment(\.modelContext) private var modelContext
     @State private var showingAddCard = false
     @State private var showingAddProduct = false
@@ -18,6 +20,13 @@ struct AddCardView: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 16) {
+                // Header
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Add Inventory")
+                        .font(.manrope(24, weight: .bold))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                
                 // Add Card Button
                 Button(action: {
                     showingAddCard = true
@@ -25,30 +34,30 @@ struct AddCardView: View {
                     HStack(spacing: 16) {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 32))
-                            .foregroundColor(.adaptiveBlueOrange)
+                            .foregroundColor(.themeGold)
                         
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Add card")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.primary)
+                                .font(.manrope(18, weight: .semiBold))
+                                .foregroundColor(.themePrimaryText)
                             
                             Text("Raw or graded cards")
-                                .font(.system(size: 13))
-                                .foregroundColor(.secondary)
+                                .font(.manrope(13))
+                                .foregroundColor(.themeSecondaryText)
                         }
                         
                         Spacer()
                         
                         Image(systemName: "chevron.right")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.themeSecondaryText)
                     }
                     .padding(16)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .background(Color.themeCardBackground)
                     .cornerRadius(12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.adaptiveBlueOrange.opacity(0.2), lineWidth: 1)
+                            .stroke(Color.themeGold.opacity(0.2), lineWidth: 1)
                     )
                 }
                 .buttonStyle(.plain)
@@ -60,30 +69,30 @@ struct AddCardView: View {
                     HStack(spacing: 16) {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 32))
-                            .foregroundColor(.adaptiveBlueOrange)
+                            .foregroundColor(.themeGold)
                         
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Add sealed product")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.primary)
+                                .font(.manrope(18, weight: .semiBold))
+                                .foregroundColor(.themePrimaryText)
                             
                             Text("Booster boxes, ETBs, packs, etc.")
-                                .font(.system(size: 13))
-                                .foregroundColor(.secondary)
+                                .font(.manrope(13))
+                                .foregroundColor(.themeSecondaryText)
                         }
                         
                         Spacer()
                         
                         Image(systemName: "chevron.right")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.themeSecondaryText)
                     }
                     .padding(16)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .background(Color.themeCardBackground)
                     .cornerRadius(12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.adaptiveBlueOrange.opacity(0.2), lineWidth: 1)
+                            .stroke(Color.themeGold.opacity(0.2), lineWidth: 1)
                     )
                 }
                 .buttonStyle(.plain)
@@ -95,30 +104,30 @@ struct AddCardView: View {
                     HStack(spacing: 16) {
                         Image(systemName: "plus.circle.fill")
                             .font(.system(size: 32))
-                            .foregroundColor(.adaptiveBlueOrange)
+                            .foregroundColor(.themeGold)
                         
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Add miscellaneous expense")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.primary)
+                                .font(.manrope(18, weight: .semiBold))
+                                .foregroundColor(.themePrimaryText)
                             
                             Text("Card show fees, supplies, grading fees, etc.")
-                                .font(.system(size: 13))
-                                .foregroundColor(.secondary)
+                                .font(.manrope(13))
+                                .foregroundColor(.themeSecondaryText)
                         }
                         
                         Spacer()
                         
                         Image(systemName: "chevron.right")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.themeSecondaryText)
                     }
                     .padding(16)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground))
+                    .background(Color.themeCardBackground)
                     .cornerRadius(12)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.adaptiveBlueOrange.opacity(0.2), lineWidth: 1)
+                            .stroke(Color.themeGold.opacity(0.2), lineWidth: 1)
                     )
                 }
                 .buttonStyle(.plain)
@@ -126,9 +135,10 @@ struct AddCardView: View {
                 Spacer()
             }
             .padding(.horizontal)
-            .padding(.top, 24)
-            .background(Color(uiColor: .systemGroupedBackground))
-            .navigationTitle("Add Inventory")
+            .padding(.top, 8)
+            .background(Color.themeBackground)
+            .navigationTitle("")
+            .navigationBarTitleDisplayMode(.inline)
             .sheet(isPresented: $showingAddCard) {
                 AddCardFormView(modelContext: modelContext, onSave: {
                     showingAddCard = false
@@ -143,6 +153,11 @@ struct AddCardView: View {
                 AddMiscFormView(modelContext: modelContext, onSave: {
                     showingAddMisc = false
                 })
+            }
+            .onChange(of: selectedTab) { _, _ in
+                showingAddCard = false
+                showingAddProduct = false
+                showingAddMisc = false
             }
         }
     }
@@ -172,20 +187,45 @@ struct AddCardFormView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Date"){
+                Section {
                     DatePicker("Purchase Date", selection: $purchaseDate, displayedComponents: .date)
+                        .environment(\.colorScheme, .dark)
+                        .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Date")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
                 }
-                Section("Card Information") {
-                    TextField("Card Name", text: $name)
-                        .autocorrectionDisabled()
-                        .autocapitalization(.none)
-                    TextField("Card Number", text: $number)
-                        .autocorrectionDisabled()
-                        .autocapitalization(.none)
+                Section {
+                    HStack {
+                        Text("Card Name")
+                            .foregroundColor(.themePrimaryText)
+                        Spacer()
+                        TextField("", text: $name)
+                            .multilineTextAlignment(.trailing)
+                            .autocorrectionDisabled()
+                            .autocapitalization(.none)
+                    }
+                    .listRowBackground(Color.themeRowBackground)
+                    HStack {
+                        Text("Card Number")
+                            .foregroundColor(.themePrimaryText)
+                        Spacer()
+                        TextField("", text: $number)
+                            .multilineTextAlignment(.trailing)
+                            .autocorrectionDisabled()
+                            .autocapitalization(.none)
+                    }
+                    .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Card Information")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
                 }
                 
-                Section("Condition") {
+                Section {
                     Toggle("Graded", isOn: $graded)
+                        .listRowBackground(Color.themeRowBackground)
                     
                     if !graded {
                         Picker("Condition", selection: $condition) {
@@ -194,41 +234,59 @@ struct AddCardFormView: View {
                             }
                         }
                         .pickerStyle(.segmented)
+                        .listRowBackground(Color.themeRowBackground)
                     }
+                } header: {
+                    Text("Condition")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
                 }
                 
-                Section("Pricing") {
+                Section {
                     HStack {
                         Text("Buy Price")
                         Spacer()
                         Text("$")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.themeSecondaryText)
                         TextField("0.00", text: $buyPrice)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .frame(maxWidth: 100)
                     }
+                    .listRowBackground(Color.themeRowBackground)
                     
                     Toggle("Has Sale Price", isOn: $hasSalePrice)
+                        .listRowBackground(Color.themeRowBackground)
                     
                     if hasSalePrice {
                         HStack {
                             Text("Sale Price")
                             Spacer()
                             Text("$")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.themeSecondaryText)
                             TextField("0.00", text: $salePrice)
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
                                 .frame(maxWidth: 100)
                         }
+                        .listRowBackground(Color.themeRowBackground)
                         
                         DatePicker("Sale Date", selection: $saleDate, displayedComponents: .date)
+                            .environment(\.colorScheme, .dark)
+                            .listRowBackground(Color.themeRowBackground)
                     }
+                } header: {
+                    Text("Pricing")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
                 }
             }
+            .foregroundColor(.themePrimaryText)
+            .scrollContentBackground(.hidden)
+            .background(Color.themeBackground)
             .navigationTitle("Add Card")
             .navigationBarTitleDisplayMode(.inline)
+            .tint(.themeGold)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -324,49 +382,86 @@ struct AddSealedFormView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Date"){
+                Section {
                     DatePicker("Purchase Date", selection: $purchaseDate, displayedComponents: .date)
+                        .environment(\.colorScheme, .dark)
+                        .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Date")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
                 }
-                Section("Product information") {
-                    TextField("Name", text: $name)
-                        .autocorrectionDisabled()
-                        .autocapitalization(.none)
-                    TextField("Set", text: $expansion)
-                        .autocorrectionDisabled()
-                        .autocapitalization(.none)
+                Section {
+                    HStack {
+                        Text("Name")
+                            .foregroundColor(.themePrimaryText)
+                        Spacer()
+                        TextField("", text: $name)
+                            .multilineTextAlignment(.trailing)
+                            .autocorrectionDisabled()
+                            .autocapitalization(.none)
+                    }
+                    .listRowBackground(Color.themeRowBackground)
+                    HStack {
+                        Text("Set")
+                            .foregroundColor(.themePrimaryText)
+                        Spacer()
+                        TextField("", text: $expansion)
+                            .multilineTextAlignment(.trailing)
+                            .autocorrectionDisabled()
+                            .autocapitalization(.none)
+                    }
+                    .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Product information")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
                 }
-                Section("Pricing") {
+                Section {
                     HStack {
                         Text("Buy Price")
                         Spacer()
                         Text("$")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.themeSecondaryText)
                         TextField("0.00", text: $buyPrice)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .frame(maxWidth: 100)
                     }
+                    .listRowBackground(Color.themeRowBackground)
                     
                     Toggle("Has Sale Price", isOn: $hasSalePrice)
+                        .listRowBackground(Color.themeRowBackground)
                     
                     if hasSalePrice {
                         HStack {
                             Text("Sale Price")
                             Spacer()
                             Text("$")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.themeSecondaryText)
                             TextField("0.00", text: $salePrice)
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
                                 .frame(maxWidth: 100)
                         }
+                        .listRowBackground(Color.themeRowBackground)
                         
                         DatePicker("Sale Date", selection: $saleDate, displayedComponents: .date)
+                            .environment(\.colorScheme, .dark)
+                            .listRowBackground(Color.themeRowBackground)
                     }
+                } header: {
+                    Text("Pricing")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
                 }
             }
+            .foregroundColor(.themePrimaryText)
+            .scrollContentBackground(.hidden)
+            .background(Color.themeBackground)
             .navigationTitle("Add Sealed")
             .navigationBarTitleDisplayMode(.inline)
+            .tint(.themeGold)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -456,32 +551,65 @@ struct AddMiscFormView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Date"){
+                Section {
                     DatePicker("Purchase Date", selection: $purchaseDate, displayedComponents: .date)
+                        .environment(\.colorScheme, .dark)
+                        .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Date")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
                 }
-                Section("Misc supplies information") {
-                    TextField("Expense", text: $itemDescription)
-                        .autocorrectionDisabled()
-                        .autocapitalization(.none)
-                    TextField("Notes", text: $notes)
-                        .autocorrectionDisabled()
-                        .autocapitalization(.none)
+                Section {
+                    HStack {
+                        Text("Expense")
+                            .foregroundColor(.themePrimaryText)
+                        Spacer()
+                        TextField("", text: $itemDescription)
+                            .multilineTextAlignment(.trailing)
+                            .autocorrectionDisabled()
+                            .autocapitalization(.none)
+                    }
+                    .listRowBackground(Color.themeRowBackground)
+                    HStack {
+                        Text("Notes")
+                            .foregroundColor(.themePrimaryText)
+                        Spacer()
+                        TextField("", text: $notes)
+                            .multilineTextAlignment(.trailing)
+                            .autocorrectionDisabled()
+                            .autocapitalization(.none)
+                    }
+                    .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Misc supplies information")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
                 }
-                Section("Pricing") {
+                Section {
                     HStack {
                         Text("Cost")
                         Spacer()
                         Text("$")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.themeSecondaryText)
                         TextField("0.00", text: $cost)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .frame(maxWidth: 100)
                     }
+                    .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Pricing")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
                 }
             }
+            .foregroundColor(.themePrimaryText)
+            .scrollContentBackground(.hidden)
+            .background(Color.themeBackground)
             .navigationTitle("Add misc expense")
             .navigationBarTitleDisplayMode(.inline)
+            .tint(.themeGold)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
@@ -543,6 +671,6 @@ struct AddMiscFormView: View {
 
 
 #Preview {
-    AddCardView()
+    AddCardView(selectedTab: .constant(2))
         .modelContainer(for: Cards.self, inMemory: true)
 }

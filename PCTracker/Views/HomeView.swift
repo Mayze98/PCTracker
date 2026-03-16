@@ -17,6 +17,8 @@ struct ProfitByMonth: Identifiable {
 
 // MARK: - Home View
 struct HomeView: View {
+    @Binding var selectedTab: Int
+    
     @Query private var allCards: [Cards]
     @Query private var allSealedProducts: [SealedProduct]
     @Query private var miscExpenses: [MiscExpense]
@@ -74,37 +76,58 @@ struct HomeView: View {
         return cardsExpense + productsExpense + expensesCost
     }
     
-    // Chart data grouped by month
+    // Calculate net profit for a given month (same logic as netProfitMonthChange)
+    private func netProfitForMonth(startOfMonth: Date, endOfMonth: Date) -> Double {
+        var profit: Double = 0
+        for card in soldCards {
+            let dateToCheck = card.saleDate ?? card.purchaseDate
+            if dateToCheck >= startOfMonth && dateToCheck <= endOfMonth {
+                profit += (card.profit ?? 0)
+            }
+        }
+        for product in soldSealedProducts {
+            let dateToCheck = product.saleDate ?? product.purchaseDate
+            if dateToCheck >= startOfMonth && dateToCheck <= endOfMonth {
+                profit += (product.profit ?? 0)
+            }
+        }
+        for expense in miscExpenses {
+            if expense.purchaseDate >= startOfMonth && expense.purchaseDate <= endOfMonth {
+                profit -= expense.cost
+            }
+        }
+        return profit
+    }
+    
+    // Chart data grouped by month — uses the same calculation as netProfitMonthChange
     private var profitByMonth: [ProfitByMonth] {
         let calendar = Calendar.current
-        var monthlyProfits: [Date: Double] = [:]
         
-        // Group sold cards by month (using sale date)
+        // Collect all relevant dates to determine which months have activity
+        var monthStarts: Set<Date> = []
         for card in soldCards {
-            guard let profit = card.profit else { continue }
-            // Use saleDate if available, otherwise fall back to purchaseDate
             let dateToUse = card.saleDate ?? card.purchaseDate
             let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: dateToUse))!
-            monthlyProfits[monthStart, default: 0] += profit
+            monthStarts.insert(monthStart)
         }
-        
-        // Group sold products by month (using sale date)
         for product in soldSealedProducts {
-            guard let profit = product.profit else { continue }
-            // Use saleDate if available, otherwise fall back to purchaseDate
             let dateToUse = product.saleDate ?? product.purchaseDate
             let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: dateToUse))!
-            monthlyProfits[monthStart, default: 0] += profit
+            monthStarts.insert(monthStart)
         }
-        
-        // Subtract expenses by month
         for expense in miscExpenses {
             let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: expense.purchaseDate))!
-            monthlyProfits[monthStart, default: 0] -= expense.cost
+            monthStarts.insert(monthStart)
         }
         
-        return monthlyProfits.map { ProfitByMonth(month: $0.key, profit: $0.value) }
-            .sorted { $0.month < $1.month }
+        // Calculate profit for each month using full month range
+        return monthStarts.map { monthStart in
+            let endOfMonth = calendar.date(byAdding: DateComponents(month: 1, second: -1), to: monthStart)!
+            let profit = netProfitForMonth(startOfMonth: monthStart, endOfMonth: endOfMonth)
+            return ProfitByMonth(month: monthStart, profit: profit)
+        }
+        .filter { $0.profit != 0 }
+        .sorted { $0.month < $1.month }
     }
     
     
@@ -167,31 +190,10 @@ struct HomeView: View {
         let calendar = Calendar.current
         let now = Date()
         
-        // Get start of current month and today (end of day)
         let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
-        let endOfToday = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: now)!
+        let endOfMonth = calendar.date(byAdding: DateComponents(month: 1, second: -1), to: startOfMonth)!
         
-        // Calculate profit earned in current month to date (based on sale date)
-        var profit: Double = 0
-        for card in soldCards {
-            // Use saleDate if available, otherwise fall back to purchaseDate
-            let dateToCheck = card.saleDate ?? card.purchaseDate
-            if dateToCheck >= startOfMonth && dateToCheck <= endOfToday {
-                profit += (card.profit ?? 0)
-            }
-        }
-        for product in soldSealedProducts {
-            // Use saleDate if available, otherwise fall back to purchaseDate
-            let dateToCheck = product.saleDate ?? product.purchaseDate
-            if dateToCheck >= startOfMonth && dateToCheck <= endOfToday {
-                profit += (product.profit ?? 0)
-            }
-        }
-        for expense in miscExpenses {
-            if expense.purchaseDate >= startOfMonth && expense.purchaseDate <= endOfToday {
-                profit -= expense.cost
-            }
-        }
+        let profit = netProfitForMonth(startOfMonth: startOfMonth, endOfMonth: endOfMonth)
         
         let sign = profit > 0 ? "+" : ""
         return "\(sign)$\(String(format: "%.1f", profit))"
@@ -234,14 +236,36 @@ struct HomeView: View {
         return "0.00%"
     }
     
+    private var totalSoldCount: Int {
+        soldCards.count + soldSealedProducts.count
+    }
+    
+    private var soldMonthChange: String {
+        let calendar = Calendar.current
+        let now = Date()
+        let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: now))!
+        let endOfToday = calendar.date(bySettingHour: 23, minute: 59, second: 59, of: now)!
+        
+        let count = soldCards.filter {
+            let d = $0.saleDate ?? $0.purchaseDate
+            return d >= startOfMonth && d <= endOfToday
+        }.count + soldSealedProducts.filter {
+            let d = $0.saleDate ?? $0.purchaseDate
+            return d >= startOfMonth && d <= endOfToday
+        }.count
+        
+        let sign = count > 0 ? "+" : ""
+        return "\(sign)\(count)"
+    }
+    
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             // Header
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text("PCTracker")
-                        .font(.system(size: 34, weight: .bold))
+                        .font(.manrope(24, weight: .bold))
                     Image("gold_star-nobg")
                         .resizable()
                         .scaledToFit()
@@ -250,7 +274,7 @@ struct HomeView: View {
                 }
 //                Text("\(inventoryCards.count) cards in collection")
 //                    .font(.system(size: 17))
-//                    .foregroundColor(.secondary)
+//                    .foregroundColor(.themeSecondaryText)
             }
             .padding(.horizontal)
             .padding(.top, 8)
@@ -261,63 +285,79 @@ struct HomeView: View {
                     // Total Cards
                     FlippableStatCard(
                         icon: "lanyardcard",
-                        iconColor: .adaptiveBlueOrange,
+                        iconColor: .themeGold,
                         title: "Cards",
                         value: "\(inventoryCards.count)",
                         backTitle: "Monthly",
                         backValue: cardsMonthChange,
                         backIcon: "calendar",
-                        valueFontSize: 18
+                        valueFontSize: 18,
+                        selectedTab: $selectedTab
                     )
                     // Sealed
                     FlippableStatCard(
                         icon: "cube.box",
-                        iconColor: .adaptiveBlueOrange,
+                        iconColor: .themeGold,
                         title: "Sealed",
                         value: "\(inventorySealedProducts.count)",
                         backTitle: "Monthly",
                         backValue: sealedMonthChange,
                         backIcon: "calendar",
-                        valueFontSize: 18
+                        valueFontSize: 18,
+                        selectedTab: $selectedTab
                     )
                 }
                 HStack(spacing: 12) {
                     // Inventory
                     FlippableStatCard(
                         icon: "storefront",
-                        iconColor: .adaptiveBlueOrange,
+                        iconColor: .themeGold,
                         title: "Inventory",
                         value: String(format: "$%.1f", totalCards + totalProducts),
                         backTitle: "Monthly",
                         backValue: inventoryMonthChange,
                         backIcon: "calendar",
-                        valueFontSize: 18
+                        valueFontSize: 18,
+                        selectedTab: $selectedTab
                     )
-                    // Profit
+                    // Total Sold
                     FlippableStatCard(
-                        icon: "dollarsign",
-                        iconColor: .adaptiveBlueOrange,
-                        title: "Net Profit",
-                        value: String(format: "$%.1f", totalProfit),
+                        icon: "shippingbox",
+                        iconColor: .themeGold,
+                        title: "Total Sold",
+                        value: "\(totalSoldCount)",
                         backTitle: "Monthly",
-                        backValue: netProfitMonthChange,
+                        backValue: soldMonthChange,
                         backIcon: "calendar",
-                        valueFontSize: 18
+                        valueFontSize: 18,
+                        selectedTab: $selectedTab
                     )
                 }
             }
             .padding(.horizontal)
             
-            HStack {
+            HStack(spacing: 12) {
+                FlippableStatCard(
+                    icon: "dollarsign",
+                    iconColor: .themeGold,
+                    title: "Net Profit",
+                    value: String(format: "$%.1f", totalProfit),
+                    backTitle: "Monthly",
+                    backValue: netProfitMonthChange,
+                    backIcon: "calendar",
+                    valueFontSize: 18,
+                    selectedTab: $selectedTab
+                )
                 FlippableStatCard(
                     icon: "chart.line.uptrend.xyaxis",
-                    iconColor: .green,
-                    title: "Return on Investment",
+                    iconColor: .themeGold,
+                    title: "ROI",
                     value: totalExpenses > 0 ? String(format: "%.2f%%", ((totalSales - totalExpenses)/totalExpenses) * 100) : "0.00%",
                     backTitle: "YTD ROI",
                     backValue: yearToDateROI,
                     backIcon: "calendar.badge.clock",
-                    valueFontSize: 28
+                    valueFontSize: 18,
+                    selectedTab: $selectedTab
                 )
             }
             .padding(.horizontal)
@@ -325,7 +365,7 @@ struct HomeView: View {
             // Realized Profit Chart
             VStack(alignment: .leading, spacing: 12) {
                 Text("Realized Profit by Month")
-                    .font(.system(size: 20, weight: .semibold))
+                    .font(.manrope(20, weight: .semiBold))
                     .padding(.horizontal)
                 
                 if profitByMonth.isEmpty {
@@ -333,10 +373,10 @@ struct HomeView: View {
                     VStack(spacing: 16) {
                         Image(systemName: "chart.bar")
                             .font(.system(size: 40))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.themeSecondaryText)
                         Text("No realized profit yet")
-                            .font(.system(size: 17))
-                            .foregroundColor(.secondary)
+                            .font(.manrope(.body))
+                            .foregroundColor(.themeSecondaryText)
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 200)
@@ -346,7 +386,7 @@ struct HomeView: View {
                             x: .value("Month", item.month, unit: .month),
                             y: .value("Profit", item.profit)
                         )
-                        .foregroundStyle(item.profit >= 0 ? Color(red: 0.4, green: 0.8, blue: 0.5) : Color(red: 0.9, green: 0.5, blue: 0.5))
+                        .foregroundStyle(item.profit >= 0 ? Color.themeGold : Color.themeLoss)
                         .cornerRadius(6)
                         .opacity(selectedMonth == nil || Calendar.current.isDate(selectedMonth!, equalTo: item.month, toGranularity: .month) ? 1.0 : 0.3)
                     }
@@ -355,6 +395,7 @@ struct HomeView: View {
                             if let date = value.as(Date.self) {
                                 AxisValueLabel {
                                     Text(date, format: .dateTime.month(.abbreviated))
+                                        .foregroundStyle(.white)
                                 }
                             }
                         }
@@ -364,6 +405,7 @@ struct HomeView: View {
                             AxisValueLabel {
                                 if let profit = value.as(Double.self) {
                                     Text("$\(profit, specifier: "%.0f")")
+                                        .foregroundStyle(.white)
                                 }
                             }
                         }
@@ -377,18 +419,19 @@ struct HomeView: View {
                        let selectedData = profitByMonth.first(where: { Calendar.current.isDate($0.month, equalTo: selectedMonth, toGranularity: .month) }) {
                         VStack(spacing: 8) {
                             Text(selectedData.month, format: .dateTime.month(.wide).year())
-                                .font(.system(size: 16, weight: .semibold))
+                                .font(.manrope(16, weight: .semiBold))
                             HStack(spacing: 4) {
                                 Text("Profit:")
-                                    .foregroundColor(.secondary)
+                                    .font(.manrope(.body))
+                                    .foregroundColor(.themeSecondaryText)
                                 Text(selectedData.profit >= 0 ? "+$\(selectedData.profit, specifier: "%.2f")" : "-$\(abs(selectedData.profit), specifier: "%.2f")")
-                                    .font(.system(size: 18, weight: .bold))
-                                    .foregroundColor(selectedData.profit >= 0 ? .green : .red)
+                                    .font(.manrope(18, weight: .bold))
+                                    .foregroundColor(selectedData.profit >= 0 ? .themeGold : .themeLoss)
                             }
                         }
                         .padding()
                         .frame(maxWidth: .infinity)
-                        .background(Color(.secondarySystemGroupedBackground))
+                        .background(Color.themeCardBackground)
                         .cornerRadius(12)
                         .padding(.horizontal)
                         .transition(.opacity)
@@ -396,11 +439,11 @@ struct HomeView: View {
                 }
             }
             .padding(.vertical)
-            .background(Color(.systemBackground))
+            .background(Color.themeRowBackground)
             .cornerRadius(16)
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color(.separator), lineWidth: 1)
+                    .stroke(Color.themeGold.opacity(0.15), lineWidth: 1)
             )
             .padding(.horizontal)
             .contentShape(Rectangle())
@@ -413,11 +456,14 @@ struct HomeView: View {
             
             Spacer()
         }
-        .background(Color(.systemGroupedBackground))
+        .background(Color.themeBackground)
+        .onChange(of: selectedTab) { _, _ in
+            selectedMonth = nil
+        }
     }
 }
 
 #Preview {
-    HomeView()
+    HomeView(selectedTab: .constant(0))
         .modelContainer(for: [Cards.self, SealedProduct.self, MiscExpense.self], inMemory: true)
 }

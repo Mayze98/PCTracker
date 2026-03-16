@@ -23,27 +23,27 @@ struct InventoryCardRow: View {
         HStack {
             if isMultiSelectMode {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isSelected ? .blue : .gray)
+                    .foregroundColor(isSelected ? .themeGold : .gray)
                     .imageScale(.large)
             }
             
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(card.name)
-                        .font(.headline)
+                        .font(.manrope(.headline, weight: .semiBold))
                     Spacer()
                     if card.graded {
                         Text("GRADED")
-                            .font(.caption2)
+                            .font(.manrope(.caption2, weight: .bold))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color.adaptiveBlueOrange.opacity(0.2))
-                            .foregroundColor(.adaptiveBlueOrange)
+                            .background(Color.themeGold.opacity(0.2))
+                            .foregroundColor(.themeGold)
                             .cornerRadius(4)
                     } else {
                         let conditionColor = Color.conditionColor(for: card.condition, isGraded: false)
                         Text(card.condition)
-                            .font(.caption2)
+                            .font(.manrope(.caption2, weight: .bold))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(conditionColor.opacity(0.2))
@@ -54,8 +54,8 @@ struct InventoryCardRow: View {
                 
                 if let number = card.number {
                     Text("#\(number)")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(.manrope(.subheadline))
+                        .foregroundColor(.themeSecondaryText)
                 }
                 
                 HStack {
@@ -63,34 +63,34 @@ struct InventoryCardRow: View {
                         // Show only profit, ROI %, and sale date for archived items
                         if let profit = card.profit {
                             Text("\(profit >= 0 ? "+" : "")$\(profit, format: .number.precision(.fractionLength(2)))")
-                                .font(.subheadline)
-                                .foregroundColor(profit >= 0 ? .green : .red)
+                                .font(.manrope(.subheadline, weight: .medium))
+                                .foregroundColor(profit >= 0 ? .themeGold : .themeLoss)
                             
                             if let roi = card.roi {
                                 Text("(\(roi >= 0 ? "+" : "")\(roi, specifier: "%.1f")%)")
-                                    .font(.subheadline)
-                                    .foregroundColor(roi >= 0 ? .green : .red)
+                                    .font(.manrope(.subheadline, weight: .medium))
+                                    .foregroundColor(roi >= 0 ? .themeGold : .themeLoss)
                             }
                         }
                         
                         // Show sale date if available, otherwise show purchase date
                         if let saleDate = card.saleDate {
                             Text("\(saleDate, format: .dateTime.month().day().year())")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                                .font(.manrope(.caption))
+                                .foregroundColor(.themeSecondaryText)
                         } else {
                             Text("\(card.purchaseDate, format: .dateTime.month().day().year())")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                                .font(.manrope(.caption))
+                                .foregroundColor(.themeSecondaryText)
                         }
                     } else {
                         // Show buy price and purchase date for inventory items
                         Text("Buy: $\(card.buyPrice, format: .number.precision(.fractionLength(2)))")
-                            .font(.subheadline)
+                            .font(.manrope(.subheadline))
                         
                         Text("\(card.purchaseDate, format: .dateTime.month().day().year())")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(.manrope(.caption))
+                            .foregroundColor(.themeSecondaryText)
                     }
                 }
             }
@@ -131,18 +131,18 @@ struct InventorySealedProductRow: View {
         HStack {
             if isMultiSelectMode {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isSelected ? .blue : .gray)
+                    .foregroundColor(isSelected ? .themeGold : .gray)
                     .imageScale(.large)
             }
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(product.name)
-                    .font(.headline)
+                    .font(.manrope(.headline, weight: .semiBold))
                 
                 if let expansion = product.expansion {
                     Text(expansion)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(.manrope(.subheadline))
+                        .foregroundColor(.themeSecondaryText)
                 }
                 
                 HStack {
@@ -150,34 +150,34 @@ struct InventorySealedProductRow: View {
                         // Show only profit, ROI %, and sale date for archived items
                         if let profit = product.profit {
                             Text("\(profit >= 0 ? "+" : "")$\(profit, format: .number.precision(.fractionLength(2)))")
-                                .font(.subheadline)
-                                .foregroundColor(profit >= 0 ? .green : .red)
+                                .font(.manrope(.subheadline, weight: .medium))
+                                .foregroundColor(profit >= 0 ? .themeGold : .themeLoss)
                             
                             if let roi = product.roi {
                                 Text("(\(roi >= 0 ? "+" : "")\(roi, specifier: "%.1f")%)")
-                                    .font(.subheadline)
-                                    .foregroundColor(roi >= 0 ? .green : .red)
+                                    .font(.manrope(.subheadline, weight: .medium))
+                                    .foregroundColor(roi >= 0 ? .themeGold : .themeLoss)
                             }
                         }
                         
                         // Show sale date if available, otherwise show purchase date
                         if let saleDate = product.saleDate {
                             Text("\(saleDate, format: .dateTime.month().day().year())")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                                .font(.manrope(.caption))
+                                .foregroundColor(.themeSecondaryText)
                         } else {
                             Text("\(product.purchaseDate, format: .dateTime.month().day().year())")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                                .font(.manrope(.caption))
+                                .foregroundColor(.themeSecondaryText)
                         }
                     } else {
                         // Show buy price and purchase date for inventory items
                         Text("Buy: $\(product.buyPrice, format: .number.precision(.fractionLength(2)))")
-                            .font(.subheadline)
+                            .font(.manrope(.subheadline))
                         
                         Text("\(product.purchaseDate, format: .dateTime.month().day().year())")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(.manrope(.caption))
+                            .foregroundColor(.themeSecondaryText)
                     }
                 }
             }
@@ -217,28 +217,28 @@ struct InventoryMiscExpenseRow: View {
         HStack {
             if isMultiSelectMode {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundColor(isSelected ? .blue : .gray)
+                    .foregroundColor(isSelected ? .themeGold : .gray)
                     .imageScale(.large)
             }
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(expense.itemDescription)
-                    .font(.headline)
+                    .font(.manrope(.headline, weight: .semiBold))
                 
                 if let notes = expense.notes, !notes.isEmpty {
                     Text(notes)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .font(.manrope(.subheadline))
+                        .foregroundColor(.themeSecondaryText)
                         .lineLimit(2)
                 }
                 
                 HStack {
                     Text("Cost: $\(expense.cost, format: .number.precision(.fractionLength(2)))")
-                        .font(.subheadline)
-                        .foregroundColor(.red)
+                        .font(.manrope(.subheadline, weight: .medium))
+                        .foregroundColor(.themeLoss)
                     Text("• \(expense.purchaseDate, format: .dateTime.month().day().year())")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                        .font(.manrope(.caption))
+                        .foregroundColor(.themeSecondaryText)
                 }
             }
         }
@@ -296,7 +296,7 @@ struct ActionButtonsBar: View {
                 Image(systemName: "checkmark.circle")
                     .font(.system(size: 14, weight: .medium))
                 Text("Select")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.manrope(13, weight: .medium))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
@@ -320,10 +320,10 @@ struct ActionButtonsBar: View {
                 Image(systemName: activeFilterCount > 0 ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                     .font(.system(size: 14, weight: .medium))
                 Text("Filter")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.manrope(13, weight: .medium))
                 if activeFilterCount > 0 {
                     Text("\(activeFilterCount)")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.manrope(10, weight: .bold))
                         .foregroundColor(.white)
                         .frame(minWidth: 16, minHeight: 16)
                         .background(Circle().fill(Color.adaptiveBlueOrange))
@@ -374,7 +374,7 @@ struct ActionButtonsBar: View {
                 Image(systemName: "arrow.up.arrow.down.circle")
                     .font(.system(size: 14, weight: .medium))
                 Text("Sort")
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.manrope(13, weight: .medium))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
@@ -418,7 +418,7 @@ struct RangeSlider: View {
                 
                 // Active track
                 RoundedRectangle(cornerRadius: trackHeight / 2)
-                    .fill(Color.blue)
+                    .fill(Color.themeGold)
                     .frame(width: max(0, maxOffset - minOffset), height: trackHeight)
                     .offset(x: minOffset)
                 
@@ -445,7 +445,7 @@ struct RangeSlider: View {
             .fill(Color.white)
             .frame(width: thumbSize, height: thumbSize)
             .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 1)
-            .overlay(Circle().stroke(Color.blue, lineWidth: 2))
+            .overlay(Circle().stroke(Color.themeGold, lineWidth: 2))
     }
     
     private func minDragGesture(geometry: GeometryProxy) -> some Gesture {
@@ -495,12 +495,13 @@ struct EmptyStateView: View {
             Spacer()
             Image(systemName: icon)
                 .font(.system(size: 60))
-                .foregroundColor(.secondary)
+                .foregroundColor(.themeSecondaryText)
                 .padding(.bottom, 16)
             Text(title)
-                .font(.system(size: 22, weight: .semibold))
+                .font(.manrope(22, weight: .semiBold))
             Text(subtitle)
-                .foregroundColor(.secondary)
+                .font(.manrope(.body))
+                .foregroundColor(.themeSecondaryText)
                 .padding(.top, 4)
             Spacer()
         }
@@ -515,11 +516,11 @@ struct NoResultsView: View {
                     .font(.system(size: 40))
                     .foregroundColor(.gray)
                 Text("No Results")
-                    .font(.headline)
-                    .foregroundColor(.secondary)
+                    .font(.manrope(.headline, weight: .semiBold))
+                    .foregroundColor(.themeSecondaryText)
                 Text("Try adjusting your search or filters")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(.manrope(.subheadline))
+                    .foregroundColor(.themeSecondaryText)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 40)

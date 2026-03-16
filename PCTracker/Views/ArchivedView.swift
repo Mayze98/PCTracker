@@ -9,6 +9,8 @@ import SwiftUI
 
 // MARK: - Archived View
 struct ArchivedView: View {
+    @Binding var selectedTab: Int
+    
     @Environment(\.modelContext) private var modelContext
     @Query private var allCards: [Cards]
     @Query private var allSealedProducts: [SealedProduct]
@@ -258,9 +260,26 @@ struct ArchivedView: View {
 
     var body: some View {
         NavigationView {
-            contentView
-                .navigationTitle("Total Profit : $\(totalProfit, specifier: "%.2f")")
-                .searchable(text: $searchText, prompt: "Search archive")
+            VStack(spacing: 0) {
+                // Header
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Archived")
+                        .font(.manrope(24, weight: .bold))
+                    Text("Total Profit: $\(totalProfit, specifier: "%.2f")")
+                        .font(.manrope(15, weight: .medium))
+                        .foregroundColor(totalProfit >= 0 ? .themeGold : .themeLoss)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal)
+                .padding(.top, 8)
+                .background(Color.themeBackground)
+                
+                contentView
+            }
+                .background(Color.themeBackground)
+                .navigationTitle("")
+                .navigationBarTitleDisplayMode(.inline)
+                .tint(.themeGold)
                 .toolbar {
                     toolbarContent
                 }
@@ -329,7 +348,31 @@ struct ArchivedView: View {
     }
     
     private var archiveListView: some View {
+        ScrollViewReader { scrollProxy in
+        ZStack(alignment: .bottomTrailing) {
         List {
+            // Search
+            Section {
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.themeSecondaryText)
+                    TextField("Search archive", text: $searchText)
+                        .font(.manrope(.body))
+                    if !searchText.isEmpty {
+                        Button {
+                            searchText = ""
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.themeSecondaryText)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .listRowBackground(Color.themeRowBackground)
+            }
+            .id("archivedTop")
+
+            
             actionButtonsSection
             
             if cards.isEmpty && sealedProducts.isEmpty && filteredMiscExpenses.isEmpty {
@@ -348,6 +391,54 @@ struct ArchivedView: View {
                 miscExpensesSection
             }
         }
+        .contentMargins(.top, 8)
+        .listSectionSpacing(12)
+        .scrollContentBackground(.hidden)
+        .background(Color.themeBackground)
+        .onChange(of: selectedTab) { _, _ in
+            searchText = ""
+            isMultiSelectMode = false
+            selectedCards.removeAll()
+            selectedProducts.removeAll()
+            selectedExpenses.removeAll()
+            showingFilters = false
+            filterItemType = [.cards, .sealedProducts, .miscExpenses]
+            filterConditions = []
+            useBuyPriceFilter = false
+            minBuyPrice = 0
+            maxBuyPrice = 1000
+            useProfitFilter = false
+            minProfit = -500
+            maxProfit = 500
+            useDateFilter = false
+            startDate = Calendar.current.date(byAdding: .month, value: -1, to: Date()) ?? Date()
+            endDate = Date()
+            sortOption = .date
+            sortAscending = false
+        }
+        
+        // Scroll to top button
+        Button {
+            withAnimation {
+                scrollProxy.scrollTo("archivedTop", anchor: .top)
+            }
+        } label: {
+            Image(systemName: "arrow.up")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(.themePrimaryText)
+                .frame(width: 44, height: 44)
+                .background(Color.themeCardBackground)
+                .clipShape(Circle())
+                .shadow(color: .black.opacity(0.25), radius: 4, x: 0, y: 2)
+                .overlay(
+                    Circle()
+                        .stroke(Color.themeGold.opacity(0.3), lineWidth: 1)
+                )
+        }
+        .padding(.trailing, 20)
+        .padding(.bottom, 20)
+        } // ZStack
+        } // ScrollViewReader
     }
     
     private var actionButtonsSection: some View {
@@ -371,8 +462,8 @@ struct ArchivedView: View {
             HStack {
                 Image(systemName: "checkmark.circle")
                 Text("Select")
+                    .font(.manrope(.subheadline, weight: .medium))
             }
-            .font(.subheadline)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
             .background(Color.adaptiveBlueOrange.opacity(0.1))
@@ -389,9 +480,10 @@ struct ArchivedView: View {
             HStack {
                 Image(systemName: "line.3.horizontal.decrease.circle")
                 Text("Filter")
+                    .font(.manrope(.subheadline, weight: .medium))
                 if activeFilterCount > 0 {
                     Text("\(activeFilterCount)")
-                        .font(.caption2)
+                        .font(.manrope(.caption2, weight: .bold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
@@ -399,7 +491,6 @@ struct ArchivedView: View {
                         .clipShape(Capsule())
                 }
             }
-            .font(.subheadline)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
             .background(Color.adaptiveBlueOrange.opacity(0.1))
@@ -440,8 +531,8 @@ struct ArchivedView: View {
             HStack {
                 Image(systemName: "arrow.up.arrow.down")
                 Text("Sort")
+                    .font(.manrope(.subheadline, weight: .medium))
             }
-            .font(.subheadline)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
             .background(Color.adaptiveBlueOrange.opacity(0.1))
@@ -456,7 +547,7 @@ struct ArchivedView: View {
     }
     
     private var cardsSection: some View {
-        Section("Cards") {
+        Section {
             ForEach(cards) { card in
                 InventoryCardRow(
                     card: card,
@@ -467,12 +558,16 @@ struct ArchivedView: View {
                     onDelete: { modelContext.delete(card) },
                     onEdit: { selectedCard = card }
                 )
+                .listRowBackground(Color.themeRowBackground)
             }
+        } header: {
+            Text("Cards")
+                .textCase(nil)
         }
     }
     
     private var sealedProductsSection: some View {
-        Section("Sealed Products") {
+        Section {
             ForEach(sealedProducts) { product in
                 InventorySealedProductRow(
                     product: product,
@@ -483,12 +578,16 @@ struct ArchivedView: View {
                     onDelete: { modelContext.delete(product) },
                     onEdit: { selectedProduct = product }
                 )
+                .listRowBackground(Color.themeRowBackground)
             }
+        } header: {
+            Text("Sealed Products")
+                .textCase(nil)
         }
     }
     
     private var miscExpensesSection: some View {
-        Section("Misc Expenses") {
+        Section {
             ForEach(filteredMiscExpenses) { expense in
                 InventoryMiscExpenseRow(
                     expense: expense,
@@ -498,7 +597,11 @@ struct ArchivedView: View {
                     onDelete: { modelContext.delete(expense) },
                     onEdit: { selectedExpense = expense }
                 )
+                .listRowBackground(Color.themeRowBackground)
             }
+        } header: {
+            Text("Misc Expenses")
+                .textCase(nil)
         }
     }
     
@@ -518,8 +621,8 @@ struct ArchivedView: View {
             
             ToolbarItem(placement: .status) {
                 Text("\(selectedCards.count + selectedProducts.count + selectedExpenses.count) selected")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .font(.manrope(.subheadline))
+                    .foregroundColor(.themeSecondaryText)
             }
             
             ToolbarItem(placement: .navigationBarTrailing) {
@@ -638,9 +741,10 @@ struct ArchivedFilterView: View {
                         endDate = Date()
                     }
                     .foregroundColor(.red)
+                    .listRowBackground(Color.themeRowBackground)
                 }
                 
-                Section("Item Type") {
+                Section {
                     ForEach(ArchivedView.ItemType.allCases) { type in
                         Toggle(type.rawValue, isOn: Binding(
                             get: { itemTypes.contains(type) },
@@ -652,10 +756,14 @@ struct ArchivedFilterView: View {
                                 }
                             }
                         ))
+                        .listRowBackground(Color.themeRowBackground)
                     }
+                } header: {
+                    Text("Item Type")
+                        .textCase(nil)
                 }
                 
-                Section("Condition") {
+                Section {
                     HStack(spacing: 8) {
                         ForEach(availableConditions, id: \.self) { condition in
                             Button {
@@ -666,11 +774,11 @@ struct ArchivedFilterView: View {
                                 }
                             } label: {
                                 Text(condition)
-                                    .font(.caption)
+                                    .font(.manrope(.caption, weight: .medium))
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 8)
-                                    .background(conditions.contains(condition) ? Color.blue : Color.gray.opacity(0.2))
-                                    .foregroundColor(conditions.contains(condition) ? .white : .primary)
+                                    .background(conditions.contains(condition) ? Color.themeGold : Color.gray.opacity(0.2))
+                                    .foregroundColor(conditions.contains(condition) ? .white : .themePrimaryText)
                                     .cornerRadius(8)
                             }
                             .buttonStyle(.plain)
@@ -678,21 +786,26 @@ struct ArchivedFilterView: View {
                     }
                     .padding(.vertical, 4)
                     .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                    .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Condition")
+                        .textCase(nil)
                 }
                 
                 Section {
                     Toggle("Filter by Buy Price", isOn: $useBuyPriceFilter)
+                        .listRowBackground(Color.themeRowBackground)
                     
                     if useBuyPriceFilter {
                         VStack(alignment: .leading, spacing: 16) {
                             HStack(spacing: 16) {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Min")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                                        .font(.manrope(.caption, weight: .medium))
+                                        .foregroundColor(.themeSecondaryText)
                                     HStack(spacing: 4) {
                                         Text("$")
-                                            .foregroundColor(.secondary)
+                                            .foregroundColor(.themeSecondaryText)
                                         TextField("0", value: $minBuyPrice, format: .number.precision(.fractionLength(0)))
                                             .keyboardType(.numberPad)
                                             .textFieldStyle(.roundedBorder)
@@ -701,11 +814,11 @@ struct ArchivedFilterView: View {
                                 
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Max")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                                        .font(.manrope(.caption, weight: .medium))
+                                        .foregroundColor(.themeSecondaryText)
                                     HStack(spacing: 4) {
                                         Text("$")
-                                            .foregroundColor(.secondary)
+                                            .foregroundColor(.themeSecondaryText)
                                         TextField("10000", value: $maxBuyPrice, format: .number.precision(.fractionLength(0)))
                                             .keyboardType(.numberPad)
                                             .textFieldStyle(.roundedBorder)
@@ -722,22 +835,24 @@ struct ArchivedFilterView: View {
                             .frame(height: 30)
                         }
                         .padding(.vertical, 8)
+                        .listRowBackground(Color.themeRowBackground)
                     }
                 }
                 
                 Section {
                     Toggle("Filter by Profit", isOn: $useProfitFilter)
+                        .listRowBackground(Color.themeRowBackground)
                     
                     if useProfitFilter {
                         VStack(alignment: .leading, spacing: 16) {
                             HStack(spacing: 16) {
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Min")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                                        .font(.manrope(.caption, weight: .medium))
+                                        .foregroundColor(.themeSecondaryText)
                                     HStack(spacing: 4) {
                                         Text("$")
-                                            .foregroundColor(.secondary)
+                                            .foregroundColor(.themeSecondaryText)
                                         TextField("-500", value: $minProfit, format: .number.precision(.fractionLength(0)))
                                             .keyboardType(.numberPad)
                                             .textFieldStyle(.roundedBorder)
@@ -746,11 +861,11 @@ struct ArchivedFilterView: View {
                                 
                                 VStack(alignment: .leading, spacing: 4) {
                                     Text("Max")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
+                                        .font(.manrope(.caption, weight: .medium))
+                                        .foregroundColor(.themeSecondaryText)
                                     HStack(spacing: 4) {
                                         Text("$")
-                                            .foregroundColor(.secondary)
+                                            .foregroundColor(.themeSecondaryText)
                                         TextField("5000", value: $maxProfit, format: .number.precision(.fractionLength(0)))
                                             .keyboardType(.numberPad)
                                             .textFieldStyle(.roundedBorder)
@@ -767,26 +882,34 @@ struct ArchivedFilterView: View {
                             .frame(height: 30)
                         }
                         .padding(.vertical, 8)
+                        .listRowBackground(Color.themeRowBackground)
                     }
                 }
                 
                 Section {
                     Toggle("Filter by Date Range", isOn: $useDateFilter)
+                        .listRowBackground(Color.themeRowBackground)
                     
                     if useDateFilter {
                         HStack(spacing: 12) {
                             DatePicker("", selection: $startDate, displayedComponents: .date)
                                 .labelsHidden()
+                                .environment(\.colorScheme, .dark)
                             
                             Text("to")
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.themeSecondaryText)
                             
                             DatePicker("", selection: $endDate, displayedComponents: .date)
                                 .labelsHidden()
+                                .environment(\.colorScheme, .dark)
                         }
+                        .listRowBackground(Color.themeRowBackground)
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(Color.themeBackground)
+            .tint(.themeGold)
             .navigationTitle("Filters")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -801,7 +924,7 @@ struct ArchivedFilterView: View {
 }
 
 #Preview {
-    ArchivedView()
+    ArchivedView(selectedTab: .constant(3))
         .modelContainer(for: [Cards.self, SealedProduct.self, MiscExpense.self], inMemory: true)
 }
 

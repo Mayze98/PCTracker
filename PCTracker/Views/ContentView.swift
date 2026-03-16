@@ -13,37 +13,39 @@ struct ContentView: View {
     
     var body: some View {
         TabView(selection: $selectedTab) {
-            HomeView()
+            HomeView(selectedTab: $selectedTab)
                 .tabItem {
                     Label("Home", systemImage: "house")
                 }
                 .tag(0)
             
-            InventoryView()
+            InventoryView(selectedTab: $selectedTab)
                 .tabItem {
                     Label("Inventory", systemImage: "cube.box")
                 }
                 .tag(1)
             
-            AddCardView()
+            AddCardView(selectedTab: $selectedTab)
                 .tabItem {
                     Label("Add", systemImage: "plus.circle.fill")
                 }
                 .tag(2)
             
-            ArchivedView()
+            ArchivedView(selectedTab: $selectedTab)
                 .tabItem {
                     Label("Archived", systemImage: "archivebox")
                 }
                 .tag(3)
             
-            SettingsView()
+            SettingsView(selectedTab: $selectedTab)
                 .tabItem {
                     Label("Settings", systemImage: "gearshape")
                 }
                 .tag(4)
         }
-        .tint(.adaptiveBlueOrange) // Blue in light mode, Orange in dark mode
+        .tint(.themeGold)
+        .font(.manrope(.body))
+        .foregroundColor(.themePrimaryText)
     }
 }
 
@@ -51,3 +53,4 @@ struct ContentView: View {
     ContentView()
         .modelContainer(for: [Cards.self, SealedProduct.self, MiscExpense.self], inMemory: true)
 }
+

@@ -47,32 +47,37 @@ struct AddSalePriceView: View {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Item")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(.manrope(.caption, weight: .medium))
+                            .foregroundColor(.themeSecondaryText)
                         Text(item.name)
-                            .font(.headline)
+                            .font(.manrope(.headline, weight: .semiBold))
                     }
                     .padding(.vertical, 4)
+                    .listRowBackground(Color.themeRowBackground)
                     
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Buy Price")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                            .font(.manrope(.caption, weight: .medium))
+                            .foregroundColor(.themeSecondaryText)
                         Text("$\(item.buyPrice, format: .number.precision(.fractionLength(2)))")
-                            .font(.headline)
+                            .font(.manrope(.headline, weight: .semiBold))
                     }
                     .padding(.vertical, 4)
+                    .listRowBackground(Color.themeRowBackground)
                 }
                 
-                Section("Sale Information") {
+                Section {
                     HStack {
                         Text("$")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.themeSecondaryText)
                         TextField("0.00", text: $salePrice)
                             .keyboardType(.decimalPad)
                     }
+                    .listRowBackground(Color.themeRowBackground)
                     
                     DatePicker("Sale Date", selection: $saleDate, displayedComponents: .date)
+                        .environment(\.colorScheme, .dark)
+                        .listRowBackground(Color.themeRowBackground)
                     
                     if let price = Double(salePrice), price > 0 {
                         let profit = price - item.buyPrice
@@ -80,21 +85,31 @@ struct AddSalePriceView: View {
                             Text("Profit")
                             Spacer()
                             Text("\(profit >= 0 ? "+" : "")$\(profit, format: .number.precision(.fractionLength(2)))")
-                                .foregroundColor(profit >= 0 ? .green : .red)
+                                .foregroundColor(profit >= 0 ? .themeGold : .themeLoss)
                                 .bold()
                         }
+                        .listRowBackground(Color.themeRowBackground)
                     }
+                } header: {
+                    Text("Sale Information")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
                 }
                 
                 if showError {
                     Section {
                         Text("Please enter a valid sale price")
                             .foregroundColor(.red)
+                            .listRowBackground(Color.themeRowBackground)
                     }
                 }
             }
+            .foregroundColor(.themePrimaryText)
+            .scrollContentBackground(.hidden)
+            .background(Color.themeBackground)
             .navigationTitle("Mark as Sold")
             .navigationBarTitleDisplayMode(.inline)
+            .tint(.themeGold)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {

@@ -30,36 +30,63 @@ struct EditMiscExpenseView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Expense Information") {
-                    TextField("Description", text: $itemDescription)
+                Section {
+                    HStack {
+                        Text("Description")
+                            .foregroundColor(.themePrimaryText)
+                        Spacer()
+                        TextField("", text: $itemDescription)
+                            .multilineTextAlignment(.trailing)
+                            .autocorrectionDisabled()
+                            .autocapitalization(.none)
+                    }
+                    .listRowBackground(Color.themeRowBackground)
                     
                     HStack {
                         Text("Cost")
                         Spacer()
                         Text("$")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.themeSecondaryText)
                         TextField("0.00", text: $cost)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .frame(width: 100)
                     }
+                    .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Expense Information")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
                 }
-                .autocorrectionDisabled()
-                .autocapitalization(.none)
                 
-                Section("Purchase Date") {
+                Section {
                     DatePicker("Date", selection: $purchaseDate, displayedComponents: .date)
+                        .environment(\.colorScheme, .dark)
+                        .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Purchase Date")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
                 }
                 
-                Section("Notes") {
+                Section {
                     TextEditor(text: $notes)
                         .frame(minHeight: 100)
+                        .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Notes")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
                 }
                 .autocorrectionDisabled()
                 .autocapitalization(.none)
             }
+            .foregroundColor(.themePrimaryText)
+            .scrollContentBackground(.hidden)
+            .background(Color.themeBackground)
             .navigationTitle("Edit Expense")
             .navigationBarTitleDisplayMode(.inline)
+            .tint(.themeGold)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {

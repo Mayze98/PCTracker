@@ -34,38 +34,62 @@ struct EditSealedProductView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Product Information") {
-                    TextField("Product Name", text: $name)
-                    TextField("Expansion", text: $expansion)
+                Section {
+                    HStack {
+                        Text("Product Name")
+                            .foregroundColor(.themePrimaryText)
+                        Spacer()
+                        TextField("", text: $name)
+                            .multilineTextAlignment(.trailing)
+                            .autocorrectionDisabled()
+                            .autocapitalization(.none)
+                    }
+                    .listRowBackground(Color.themeRowBackground)
+                    HStack {
+                        Text("Expansion")
+                            .foregroundColor(.themePrimaryText)
+                        Spacer()
+                        TextField("", text: $expansion)
+                            .multilineTextAlignment(.trailing)
+                            .autocorrectionDisabled()
+                            .autocapitalization(.none)
+                    }
+                    .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Product Information")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
                 }
-                .autocorrectionDisabled()
-                .autocapitalization(.none)
                 
-                Section("Pricing") {
+                Section {
                     HStack {
                         Text("Buy Price")
                         Spacer()
                         Text("$")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.themeSecondaryText)
                         TextField("0.00", text: $buyPrice)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .frame(width: 100)
                     }
+                    .listRowBackground(Color.themeRowBackground)
                     
                     HStack {
                         Text("Sale Price")
                         Spacer()
                         Text("$")
-                            .foregroundColor(.secondary)
+                            .foregroundColor(.themeSecondaryText)
                         TextField("Optional", text: $salePrice)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .frame(width: 100)
                     }
+                    .listRowBackground(Color.themeRowBackground)
                     
                     if !salePrice.isEmpty && Double(salePrice) != nil {
                         DatePicker("Sale Date", selection: $saleDate, displayedComponents: .date)
+                            .environment(\.colorScheme, .dark)
+                            .listRowBackground(Color.themeRowBackground)
                     }
                     
                     if let buyPriceValue = Double(buyPrice),
@@ -76,18 +100,33 @@ struct EditSealedProductView: View {
                             Text("Profit")
                             Spacer()
                             Text("\(profit >= 0 ? "+" : "")$\(profit, format: .number.precision(.fractionLength(2)))")
-                                .foregroundColor(profit >= 0 ? .green : .red)
+                                .foregroundColor(profit >= 0 ? .themeGold : .themeLoss)
                                 .bold()
                         }
+                        .listRowBackground(Color.themeRowBackground)
                     }
+                } header: {
+                    Text("Pricing")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
                 }
                 
-                Section("Purchase Date") {
+                Section {
                     DatePicker("Date", selection: $purchaseDate, displayedComponents: .date)
+                        .environment(\.colorScheme, .dark)
+                        .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Purchase Date")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
                 }
             }
+            .foregroundColor(.themePrimaryText)
+            .scrollContentBackground(.hidden)
+            .background(Color.themeBackground)
             .navigationTitle("Edit Product")
             .navigationBarTitleDisplayMode(.inline)
+            .tint(.themeGold)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {

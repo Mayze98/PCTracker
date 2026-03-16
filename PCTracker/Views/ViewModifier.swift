@@ -24,12 +24,12 @@ struct StatCard: View {
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.system(size: 15))
-                    .foregroundColor(.secondary)
+                    .font(.manrope(15, weight: .medium))
+                    .foregroundColor(.themeSecondaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                 Text(value)
-                    .font(.system(size: valueFontSize, weight: .semibold))
+                    .font(.manrope(valueFontSize, weight: .semiBold))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -38,11 +38,11 @@ struct StatCard: View {
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .frame(height: 82)
-        .background(Color(.systemBackground))
+        .background(Color.themeCardBackground)
         .cornerRadius(16)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(Color(.separator), lineWidth: 1)
+                .stroke(Color.themeGold.opacity(0.2), lineWidth: 1)
         )
     }
 }
@@ -55,6 +55,7 @@ struct FlippableStatCard: View {
     let backValue: String
     let backIcon: String?
     var valueFontSize: CGFloat = 28
+    @Binding var selectedTab: Int
     
     @State private var isFlipped = false
     
@@ -71,12 +72,12 @@ struct FlippableStatCard: View {
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
-                        .font(.system(size: 15))
-                        .foregroundColor(.secondary)
+                        .font(.manrope(15, weight: .medium))
+                        .foregroundColor(.themeSecondaryText)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     Text(value)
-                        .font(.system(size: valueFontSize, weight: .semibold))
+                        .font(.manrope(valueFontSize, weight: .semiBold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
@@ -86,11 +87,11 @@ struct FlippableStatCard: View {
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: 82)
-            .background(Color(.systemBackground))
+            .background(Color.themeCardBackground)
             .cornerRadius(16)
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color(.separator), lineWidth: 1)
+                    .stroke(Color.themeGold.opacity(0.2), lineWidth: 1)
             )
             .opacity(isFlipped ? 0 : 1)
             .rotation3DEffect(
@@ -111,12 +112,12 @@ struct FlippableStatCard: View {
                 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(backTitle)
-                        .font(.system(size: 15))
-                        .foregroundColor(.secondary)
+                        .font(.manrope(15, weight: .medium))
+                        .foregroundColor(.themeSecondaryText)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                     Text(backValue)
-                        .font(.system(size: valueFontSize, weight: .semibold))
+                        .font(.manrope(valueFontSize, weight: .semiBold))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                 }
@@ -126,11 +127,11 @@ struct FlippableStatCard: View {
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: 82)
-            .background(Color(.systemBackground))
+            .background(Color.themeCardBackground)
             .cornerRadius(16)
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color(.separator), lineWidth: 1)
+                    .stroke(Color.themeGold.opacity(0.2), lineWidth: 1)
             )
             .opacity(isFlipped ? 1 : 0)
             .rotation3DEffect(
@@ -142,6 +143,11 @@ struct FlippableStatCard: View {
         .onTapGesture {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
                 isFlipped.toggle()
+            }
+        }
+        .onChange(of: selectedTab) { _, _ in
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.7)) {
+                isFlipped = false
             }
         }
     }
