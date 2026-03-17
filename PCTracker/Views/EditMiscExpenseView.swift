@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import PhotosUI
 
 struct EditMiscExpenseView: View {
     @Environment(\.dismiss) private var dismiss
@@ -18,6 +19,7 @@ struct EditMiscExpenseView: View {
     @State private var cost: String
     @State private var purchaseDate: Date
     @State private var notes: String
+    @State private var photoData: Data?
     
     init(expense: MiscExpense) {
         self.expense = expense
@@ -25,6 +27,7 @@ struct EditMiscExpenseView: View {
         _cost = State(initialValue: String(format: "%.2f", expense.cost))
         _purchaseDate = State(initialValue: expense.purchaseDate)
         _notes = State(initialValue: expense.notes ?? "")
+        _photoData = State(initialValue: expense.photoData)
     }
     
     var body: some View {
@@ -80,6 +83,8 @@ struct EditMiscExpenseView: View {
                 }
                 .autocorrectionDisabled()
                 .autocapitalization(.none)
+                
+                PhotoPickerSection(photoData: $photoData)
             }
             .foregroundColor(.themePrimaryText)
             .scrollContentBackground(.hidden)
@@ -112,6 +117,7 @@ struct EditMiscExpenseView: View {
         expense.cost = costValue
         expense.purchaseDate = purchaseDate
         expense.notes = notes.isEmpty ? nil : notes
+        expense.photoData = photoData
         
         do {
             try modelContext.save()

@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import PhotosUI
 
 // MARK: - Shared Row Views
 
@@ -26,6 +27,8 @@ struct InventoryCardRow: View {
                     .foregroundColor(isSelected ? .themeGold : .gray)
                     .imageScale(.large)
             }
+            
+            PhotoThumbnail(photoData: card.photoData)
             
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
@@ -135,6 +138,8 @@ struct InventorySealedProductRow: View {
                     .imageScale(.large)
             }
             
+            PhotoThumbnail(photoData: product.photoData)
+            
             VStack(alignment: .leading, spacing: 4) {
                 Text(product.name)
                     .font(.manrope(.headline, weight: .semiBold))
@@ -220,6 +225,8 @@ struct InventoryMiscExpenseRow: View {
                     .foregroundColor(isSelected ? .themeGold : .gray)
                     .imageScale(.large)
             }
+            
+            PhotoThumbnail(photoData: expense.photoData)
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(expense.itemDescription)
@@ -597,4 +604,158 @@ extension Array where Element == MiscExpense {
         }
     }
 }
+
+// MARK: - Photo Picker Section
+struct PhotoPickerSection: View {
+    @Binding var photoData: Data?
+    
+    @State private var selectedItem: PhotosPickerItem?
+    @State private var showingSourcePicker = false
+    @State private var showingCamera = false
+    
+    var body: some View {
+        Section {
+            if let photoData, let uiImage = UIImage(data: photoData) {
+                VStack(spacing: 12) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxHeight: 200)
+                        .cornerRadius(8)
+                        .frame(maxWidth: .infinity)
+                    
+                    HStack(spacing: 16) {
+                        Button {
+                            showingSourcePicker = true
+                        } label: {
+                            Label("Replace", systemImage: "arrow.triangle.2.circlepath.camera")
+                                .font(.manrope(13, weight: .medium))
+                        }
+                        
+                        Button(role: .destructive) {
+                            withAnimation {
+                                self.photoData = nil
+                            }
+                        } label: {
+                            Label("Remove", systemImage: "trash")
+                                .font(.manrope(13, weight: .medium))
+                        }
+                    }
+                }
+                .padding(.vertical, 8)
+                .listRowBackground(Color.themeRowBackground)
+            } else {
+                Button {
+                    showingSourcePicker = true
+                } label: {
+                    HStack {
+                        Image(systemName: "camera.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(.themeGold)
+                        Text("Add Photo")
+                            .font(.manrope(16, weight: .medium))
+                            .foregroundColor(.themePrimaryText)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.themeSecondaryText)
+                    }
+                }
+                .listRowBackground(Color.themeRowBackground)
+            }
+        } header: {
+            Text("Photo")
+                .textCase(nil)
+                .foregroundColor(.themeSecondaryText)
+        }
+        .confirmationDialog("Add Photo", isPresented: $showingSourcePicker) {
+            Button("Take Photo") {
+                showingCamera = true
+            }
+            PhotosPicker(selection: $selectedItem, matching: .images) {
+                Text("Choose from Library")
+            }
+            Button("Cancel", role: .cancel) { }
+        }
+        .fullScreenCover(isPresented: $showingCamera) {
+            CameraView(photoData: $photoData)
+                .ignoresSafeArea()
+        }
+        .onChange(of: selectedItem) { _, newItem in
+            if let newItem {
+                Task {
+                    if let data = try? await newItem.loadTransferable(type: Data.self) {
+                        // Compress the image to save storage
+                        if let uiImage = UIImage(data: data),
+                           let compressed = uiImage.jpegData(compressionQuality: 0.7) {
+                            photoData = compressed
+                        } else {
+                            photoData = data
+                        }
+                    }
+                    selectedItem = nil
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Camera View (UIKit wrapper)
+
+struct CameraView: UIViewControllerRepresentable {
+    @Binding var photoData: Data?
+    @Environment(\.dismiss) private var dismiss
+    
+    func makeUIViewController(context: Context) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+        picker.sourceType = .camera
+        picker.delegate = context.coordinator
+        return picker
+    }
+    
+    func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+        let parent: CameraView
+        
+        init(_ parent: CameraView) {
+            self.parent = parent
+        }
+        
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+            if let image = info[.originalImage] as? UIImage,
+               let data = image.jpegData(compressionQuality: 0.7) {
+                parent.photoData = data
+            }
+            parent.dismiss()
+        }
+        
+        func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
+            parent.dismiss()
+        }
+    }
+}
+
+// MARK: - Photo Thumbnail for Row Views
+
+struct PhotoThumbnail: View {
+    let photoData: Data?
+    var size: CGFloat = 44
+    
+    var body: some View {
+        if let photoData, let uiImage = UIImage(data: photoData) {
+            Image(uiImage: uiImage)
+                .resizable()
+                .scaledToFill()
+                .frame(width: size, height: size)
+                .cornerRadius(6)
+                .clipped()
+        }
+    }
+}
+
 

@@ -279,6 +279,7 @@ struct ArchivedView: View {
                 .background(Color.themeBackground)
                 .navigationTitle("")
                 .navigationBarTitleDisplayMode(.inline)
+                .toolbar(isMultiSelectMode ? .visible : .hidden, for: .navigationBar)
                 .tint(.themeGold)
                 .toolbar {
                     toolbarContent

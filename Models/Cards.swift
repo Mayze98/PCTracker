@@ -19,8 +19,9 @@ class Cards {
     var salePrice: Double?
     var saleDate: Date?
     var purchaseDate: Date
+    @Attribute(.externalStorage) var photoData: Data?
     
-    init(name: String, number: String? = nil, graded: Bool = false, condition: String = "NM", buyPrice: Double, salePrice: Double? = nil, saleDate: Date? = nil, purchaseDate: Date = Date()) {
+    init(name: String, number: String? = nil, graded: Bool = false, condition: String = "NM", buyPrice: Double, salePrice: Double? = nil, saleDate: Date? = nil, purchaseDate: Date = Date(), photoData: Data? = nil) {
         self.name = name
         self.number = number
         self.graded = graded
@@ -29,6 +30,7 @@ class Cards {
         self.salePrice = salePrice
         self.saleDate = saleDate
         self.purchaseDate = purchaseDate
+        self.photoData = photoData
     }
     
     // if the card has a profit
@@ -60,14 +62,16 @@ class SealedProduct {
     var salePrice: Double?
     var saleDate: Date?
     var purchaseDate: Date
+    @Attribute(.externalStorage) var photoData: Data?
     
-    init(name: String, expansion: String, buyPrice: Double, salePrice: Double? = nil, saleDate: Date? = nil, purchaseDate: Date = Date()) {
+    init(name: String, expansion: String, buyPrice: Double, salePrice: Double? = nil, saleDate: Date? = nil, purchaseDate: Date = Date(), photoData: Data? = nil) {
         self.name = name
         self.expansion = expansion
         self.buyPrice = buyPrice
         self.salePrice = salePrice
         self.saleDate = saleDate
         self.purchaseDate = purchaseDate
+        self.photoData = photoData
     }
     
     var hasProfit: Bool {
@@ -95,11 +99,13 @@ class MiscExpense {
     var cost: Double
     var purchaseDate: Date
     var notes: String?
+    @Attribute(.externalStorage) var photoData: Data?
     
-    init(itemDescription: String, cost: Double, purchaseDate: Date = Date(), notes: String? = nil) {
+    init(itemDescription: String, cost: Double, purchaseDate: Date = Date(), notes: String? = nil, photoData: Data? = nil) {
         self.itemDescription = itemDescription
         self.cost = cost
         self.purchaseDate = purchaseDate
         self.notes = notes
+        self.photoData = photoData
     }
 }

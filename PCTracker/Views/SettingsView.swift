@@ -231,6 +231,7 @@ struct SettingsView: View {
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
             .tint(.themeGold)
             .preferredColorScheme(isDarkMode ? .dark : .light)
             .sheet(isPresented: $showingShareSheet) {

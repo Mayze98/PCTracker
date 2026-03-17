@@ -6,6 +6,7 @@
 //
 import SwiftUI
 import SwiftData
+import PhotosUI
 
 // MARK: - Add Card View
 struct AddCardView: View {
@@ -139,6 +140,7 @@ struct AddCardView: View {
             .background(Color.themeBackground)
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .navigationBar)
             .sheet(isPresented: $showingAddCard) {
                 AddCardFormView(modelContext: modelContext, onSave: {
                     showingAddCard = false
@@ -181,21 +183,13 @@ struct AddCardFormView: View {
     
     let conditions = ["NM", "LP", "MP", "HP", "DMG"]
     
+    @State private var photoData: Data?
     @State private var showingAlert = false
     @State private var alertMessage = ""
     
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    DatePicker("Purchase Date", selection: $purchaseDate, displayedComponents: .date)
-                        .environment(\.colorScheme, .dark)
-                        .listRowBackground(Color.themeRowBackground)
-                } header: {
-                    Text("Date")
-                        .textCase(nil)
-                        .foregroundColor(.themeSecondaryText)
-                }
                 Section {
                     HStack {
                         Text("Card Name")
@@ -243,6 +237,16 @@ struct AddCardFormView: View {
                 }
                 
                 Section {
+                    DatePicker("Purchase Date", selection: $purchaseDate, displayedComponents: .date)
+                        .environment(\.colorScheme, .dark)
+                        .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Date")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
+                }
+                
+                Section {
                     HStack {
                         Text("Buy Price")
                         Spacer()
@@ -280,6 +284,8 @@ struct AddCardFormView: View {
                         .textCase(nil)
                         .foregroundColor(.themeSecondaryText)
                 }
+                
+                PhotoPickerSection(photoData: $photoData)
             }
             .foregroundColor(.themePrimaryText)
             .scrollContentBackground(.hidden)
@@ -348,7 +354,8 @@ struct AddCardFormView: View {
             buyPrice: buyPriceValue,
             salePrice: salePriceValue,
             saleDate: (hasSalePrice && salePriceValue != nil) ? saleDate : nil,
-            purchaseDate: purchaseDate
+            purchaseDate: purchaseDate,
+            photoData: photoData
         )
         
         // Insert into SwiftData
@@ -376,21 +383,13 @@ struct AddSealedFormView: View {
     @State private var hasSalePrice: Bool = false
     @State private var purchaseDate: Date = Date()
     @State private var saleDate: Date = Date()
+    @State private var photoData: Data?
     @State private var showingAlert = false
     @State private var alertMessage = ""
     
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    DatePicker("Purchase Date", selection: $purchaseDate, displayedComponents: .date)
-                        .environment(\.colorScheme, .dark)
-                        .listRowBackground(Color.themeRowBackground)
-                } header: {
-                    Text("Date")
-                        .textCase(nil)
-                        .foregroundColor(.themeSecondaryText)
-                }
                 Section {
                     HStack {
                         Text("Name")
@@ -417,6 +416,17 @@ struct AddSealedFormView: View {
                         .textCase(nil)
                         .foregroundColor(.themeSecondaryText)
                 }
+                
+                Section {
+                    DatePicker("Purchase Date", selection: $purchaseDate, displayedComponents: .date)
+                        .environment(\.colorScheme, .dark)
+                        .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Date")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
+                }
+                
                 Section {
                     HStack {
                         Text("Buy Price")
@@ -455,6 +465,8 @@ struct AddSealedFormView: View {
                         .textCase(nil)
                         .foregroundColor(.themeSecondaryText)
                 }
+                
+                PhotoPickerSection(photoData: $photoData)
             }
             .foregroundColor(.themePrimaryText)
             .scrollContentBackground(.hidden)
@@ -518,7 +530,8 @@ struct AddSealedFormView: View {
             buyPrice: buyPriceValue,
             salePrice: salePriceValue,
             saleDate: (hasSalePrice && salePriceValue != nil) ? saleDate : nil,
-            purchaseDate: purchaseDate
+            purchaseDate: purchaseDate,
+            photoData: photoData
         )
         
         // Insert into SwiftData
@@ -545,21 +558,13 @@ struct AddMiscFormView: View {
     @State private var salePrice: String = ""
     @State private var purchaseDate: Date = Date()
     @State private var notes: String = ""
+    @State private var photoData: Data?
     @State private var showingAlert = false
     @State private var alertMessage = ""
     
     var body: some View {
         NavigationStack {
             Form {
-                Section {
-                    DatePicker("Purchase Date", selection: $purchaseDate, displayedComponents: .date)
-                        .environment(\.colorScheme, .dark)
-                        .listRowBackground(Color.themeRowBackground)
-                } header: {
-                    Text("Date")
-                        .textCase(nil)
-                        .foregroundColor(.themeSecondaryText)
-                }
                 Section {
                     HStack {
                         Text("Expense")
@@ -586,6 +591,17 @@ struct AddMiscFormView: View {
                         .textCase(nil)
                         .foregroundColor(.themeSecondaryText)
                 }
+                
+                Section {
+                    DatePicker("Purchase Date", selection: $purchaseDate, displayedComponents: .date)
+                        .environment(\.colorScheme, .dark)
+                        .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("Date")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
+                }
+                
                 Section {
                     HStack {
                         Text("Cost")
@@ -603,6 +619,8 @@ struct AddMiscFormView: View {
                         .textCase(nil)
                         .foregroundColor(.themeSecondaryText)
                 }
+                
+                PhotoPickerSection(photoData: $photoData)
             }
             .foregroundColor(.themePrimaryText)
             .scrollContentBackground(.hidden)
@@ -648,12 +666,13 @@ struct AddMiscFormView: View {
             return
         }
         
-        // Create the new sealed product
+        // Create the new misc expense
         let newMiscExpense = MiscExpense(
             itemDescription: itemDescription.trimmingCharacters(in: .whitespaces),
             cost: buyPriceValue,
             purchaseDate: purchaseDate,
-            notes: notes.trimmingCharacters(in: .whitespaces).isEmpty ? nil : notes.trimmingCharacters(in: .whitespaces)
+            notes: notes.trimmingCharacters(in: .whitespaces).isEmpty ? nil : notes.trimmingCharacters(in: .whitespaces),
+            photoData: photoData
         )
         
         // Insert into SwiftData

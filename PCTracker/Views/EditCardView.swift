@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import PhotosUI
 
 struct EditCardView: View {
     @Environment(\.dismiss) private var dismiss
@@ -22,6 +23,7 @@ struct EditCardView: View {
     @State private var salePrice: String
     @State private var saleDate: Date
     @State private var purchaseDate: Date
+    @State private var photoData: Data?
     
     init(card: Cards) {
         self.card = card
@@ -33,6 +35,7 @@ struct EditCardView: View {
         _salePrice = State(initialValue: card.salePrice != nil ? String(format: "%.2f", card.salePrice!) : "")
         _saleDate = State(initialValue: card.saleDate ?? Date())
         _purchaseDate = State(initialValue: card.purchaseDate)
+        _photoData = State(initialValue: card.photoData)
     }
     
     let conditions = ["NM", "LP", "MP", "HP", "DMG"]
@@ -145,6 +148,8 @@ struct EditCardView: View {
                         .textCase(nil)
                         .foregroundColor(.themeSecondaryText)
                 }
+                
+                PhotoPickerSection(photoData: $photoData)
             }
             .foregroundColor(.themePrimaryText)
             .scrollContentBackground(.hidden)
@@ -189,6 +194,7 @@ struct EditCardView: View {
         }
         
         card.purchaseDate = purchaseDate
+        card.photoData = photoData
         
         do {
             try modelContext.save()

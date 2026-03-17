@@ -7,6 +7,7 @@
 
 import SwiftUI
 import SwiftData
+import PhotosUI
 
 struct EditSealedProductView: View {
     @Environment(\.dismiss) private var dismiss
@@ -20,6 +21,7 @@ struct EditSealedProductView: View {
     @State private var salePrice: String
     @State private var saleDate: Date
     @State private var purchaseDate: Date
+    @State private var photoData: Data?
     
     init(product: SealedProduct) {
         self.product = product
@@ -29,6 +31,7 @@ struct EditSealedProductView: View {
         _salePrice = State(initialValue: product.salePrice != nil ? String(format: "%.2f", product.salePrice!) : "")
         _saleDate = State(initialValue: product.saleDate ?? Date())
         _purchaseDate = State(initialValue: product.purchaseDate)
+        _photoData = State(initialValue: product.photoData)
     }
     
     var body: some View {
@@ -120,6 +123,8 @@ struct EditSealedProductView: View {
                         .textCase(nil)
                         .foregroundColor(.themeSecondaryText)
                 }
+                
+                PhotoPickerSection(photoData: $photoData)
             }
             .foregroundColor(.themePrimaryText)
             .scrollContentBackground(.hidden)
@@ -162,6 +167,7 @@ struct EditSealedProductView: View {
         }
         
         product.purchaseDate = purchaseDate
+        product.photoData = photoData
         
         do {
             try modelContext.save()
