@@ -20,118 +20,133 @@ struct AddCardView: View {
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 16) {
+            VStack(spacing: 0) {
                 // Header
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Add Inventory")
                         .font(.manrope(24, weight: .bold))
+                        .foregroundColor(.themePrimaryText)
+                    Text("What are you adding today?")
+                        .font(.manrope(14, weight: .regular))
+                        .foregroundColor(.themeSecondaryText.opacity(0.6))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, 24)
                 
-                // Add Card Button
+                // Primary action - Cards (most common)
                 Button(action: {
                     showingAddCard = true
                 }) {
                     HStack(spacing: 16) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 32))
+                        Image(systemName: "greetingcard.fill")
+                            .font(.system(size: 28, weight: .medium))
                             .foregroundColor(.themeGold)
+                            .frame(width: 56, height: 56)
+                            .background(Color.themeGold.opacity(0.12))
+                            .cornerRadius(14)
                         
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Add card")
-                                .font(.manrope(18, weight: .semiBold))
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("Card")
+                                .font(.manrope(20, weight: .semiBold))
                                 .foregroundColor(.themePrimaryText)
-                            
-                            Text("Raw or graded cards")
-                                .font(.manrope(13))
-                                .foregroundColor(.themeSecondaryText)
+                            Text("Raw or graded single cards")
+                                .font(.manrope(14, weight: .regular))
+                                .foregroundColor(.themeSecondaryText.opacity(0.7))
+                                .lineLimit(1)
                         }
                         
                         Spacer()
                         
                         Image(systemName: "chevron.right")
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.themeSecondaryText)
+                            .foregroundColor(.themeSecondaryText.opacity(0.4))
                     }
-                    .padding(16)
+                    .padding(20)
                     .background(Color.themeCardBackground)
-                    .cornerRadius(12)
+                    .cornerRadius(16)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.themeGold.opacity(0.2), lineWidth: 1)
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color.themeGold.opacity(0.35), Color.themeGold.opacity(0.08)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
                     )
                 }
                 .buttonStyle(.plain)
+                .padding(.bottom, 12)
                 
-                // Add Sealed Product Button
-                Button(action: {
-                    showingAddProduct = true
-                }) {
-                    HStack(spacing: 16) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundColor(.themeGold)
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Add sealed product")
-                                .font(.manrope(18, weight: .semiBold))
-                                .foregroundColor(.themePrimaryText)
+                // Secondary actions in a row
+                HStack(spacing: 12) {
+                    // Sealed Product
+                    Button(action: {
+                        showingAddProduct = true
+                    }) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Image(systemName: "shippingbox.fill")
+                                .font(.system(size: 26, weight: .medium))
+                                .foregroundColor(.themeGold)
+                                .frame(width: 52, height: 52)
+                                .background(Color.themeGold.opacity(0.12))
+                                .cornerRadius(13)
                             
-                            Text("Booster boxes, ETBs, packs, etc.")
-                                .font(.manrope(13))
-                                .foregroundColor(.themeSecondaryText)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Sealed")
+                                    .font(.manrope(18, weight: .semiBold))
+                                    .foregroundColor(.themePrimaryText)
+                                Text("Boxes, ETBs, packs")
+                                    .font(.manrope(13, weight: .regular))
+                                    .foregroundColor(.themeSecondaryText.opacity(0.7))
+                                    .lineLimit(1)
+                            }
                         }
-                        
-                        Spacer()
-                        
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.themeSecondaryText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(18)
+                        .background(Color.themeCardBackground.opacity(0.7))
+                        .cornerRadius(16)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.themeGold.opacity(0.12), lineWidth: 1)
+                        )
                     }
-                    .padding(16)
-                    .background(Color.themeCardBackground)
-                    .cornerRadius(12)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.themeGold.opacity(0.2), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(.plain)
-                
-                // Add Miscellaneous Expense Button
-                Button(action: {
-                    showingAddMisc = true
-                }) {
-                    HStack(spacing: 16) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 32))
-                            .foregroundColor(.themeGold)
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Add miscellaneous expense")
-                                .font(.manrope(18, weight: .semiBold))
-                                .foregroundColor(.themePrimaryText)
+                    .buttonStyle(.plain)
+                    
+                    // Misc Expense
+                    Button(action: {
+                        showingAddMisc = true
+                    }) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Image(systemName: "receipt.fill")
+                                .font(.system(size: 26, weight: .medium))
+                                .foregroundColor(.themeGold)
+                                .frame(width: 52, height: 52)
+                                .background(Color.themeGold.opacity(0.12))
+                                .cornerRadius(13)
                             
-                            Text("Card show fees, supplies, grading fees, etc.")
-                                .font(.manrope(13))
-                                .foregroundColor(.themeSecondaryText)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Expense")
+                                    .font(.manrope(18, weight: .semiBold))
+                                    .foregroundColor(.themePrimaryText)
+                                Text("Fees, supplies, grading")
+                                    .font(.manrope(13, weight: .regular))
+                                    .foregroundColor(.themeSecondaryText.opacity(0.7))
+                                    .lineLimit(1)
+                            }
                         }
-                        
-                        Spacer()
-                        
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.themeSecondaryText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(18)
+                        .background(Color.themeCardBackground.opacity(0.7))
+                        .cornerRadius(16)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(Color.themeGold.opacity(0.12), lineWidth: 1)
+                        )
                     }
-                    .padding(16)
-                    .background(Color.themeCardBackground)
-                    .cornerRadius(12)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.themeGold.opacity(0.2), lineWidth: 1)
-                    )
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
                 
                 Spacer()
             }

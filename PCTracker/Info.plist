@@ -2,6 +2,10 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSCameraUsageDescription</key>
+	<string>PCTracker needs camera access to take photos of your cards, sealed products, and expenses.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>PCTracker needs photo library access to attach photos to your cards, sealed products, and expenses.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Manrope-Bold.ttf</string>

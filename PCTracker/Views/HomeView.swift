@@ -259,10 +259,23 @@ struct HomeView: View {
     }
     
     
+    // Formatted profit string
+    private var formattedProfit: String {
+        let absProfit = abs(totalProfit)
+        if absProfit >= 1000 {
+            return String(format: "$%.0f", totalProfit)
+        }
+        return String(format: "$%.2f", totalProfit)
+    }
+    
+    private var formattedROI: String {
+        totalExpenses > 0 ? String(format: "%.1f%%", ((totalSales - totalExpenses) / totalExpenses) * 100) : "0.0%"
+    }
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Header
-            VStack(alignment: .leading, spacing: 4) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                // Header
                 HStack {
                     Text("PCTracker")
                         .font(.manrope(24, weight: .bold))
@@ -270,192 +283,151 @@ struct HomeView: View {
                         .resizable()
                         .scaledToFit()
                         .frame(height: 60)
-
                 }
-//                Text("\(inventoryCards.count) cards in collection")
-//                    .font(.system(size: 17))
-//                    .foregroundColor(.themeSecondaryText)
-            }
-            .padding(.horizontal)
-            .padding(.top, 8)
-            
-            // Stats Grid
-            VStack(spacing: 12) {
-                HStack(spacing: 12) {
-                    // Total Cards
-                    FlippableStatCard(
-                        icon: "lanyardcard",
-                        iconColor: .themeGold,
-                        title: "Cards",
-                        value: "\(inventoryCards.count)",
-                        backTitle: "Monthly",
-                        backValue: cardsMonthChange,
-                        backIcon: "calendar",
-                        valueFontSize: 18,
-                        selectedTab: $selectedTab
-                    )
-                    // Sealed
-                    FlippableStatCard(
-                        icon: "cube.box",
-                        iconColor: .themeGold,
-                        title: "Sealed",
-                        value: "\(inventorySealedProducts.count)",
-                        backTitle: "Monthly",
-                        backValue: sealedMonthChange,
-                        backIcon: "calendar",
-                        valueFontSize: 18,
-                        selectedTab: $selectedTab
-                    )
-                }
-                HStack(spacing: 12) {
-                    // Inventory
-                    FlippableStatCard(
-                        icon: "storefront",
-                        iconColor: .themeGold,
-                        title: "Inventory",
-                        value: String(format: "$%.1f", totalCards + totalProducts),
-                        backTitle: "Monthly",
-                        backValue: inventoryMonthChange,
-                        backIcon: "calendar",
-                        valueFontSize: 18,
-                        selectedTab: $selectedTab
-                    )
-                    // Total Sold
-                    FlippableStatCard(
-                        icon: "shippingbox",
-                        iconColor: .themeGold,
-                        title: "Total Sold",
-                        value: "\(totalSoldCount)",
-                        backTitle: "Monthly",
-                        backValue: soldMonthChange,
-                        backIcon: "calendar",
-                        valueFontSize: 18,
-                        selectedTab: $selectedTab
-                    )
-                }
-            }
-            .padding(.horizontal)
-            
-            HStack(spacing: 12) {
-                FlippableStatCard(
-                    icon: "dollarsign",
-                    iconColor: .themeGold,
-                    title: "Net Profit",
-                    value: String(format: "$%.1f", totalProfit),
-                    backTitle: "Monthly",
-                    backValue: netProfitMonthChange,
-                    backIcon: "calendar",
-                    valueFontSize: 18,
-                    selectedTab: $selectedTab
-                )
-                FlippableStatCard(
-                    icon: "chart.line.uptrend.xyaxis",
-                    iconColor: .themeGold,
-                    title: "ROI",
-                    value: totalExpenses > 0 ? String(format: "%.2f%%", ((totalSales - totalExpenses)/totalExpenses) * 100) : "0.00%",
-                    backTitle: "YTD ROI",
-                    backValue: yearToDateROI,
-                    backIcon: "calendar.badge.clock",
-                    valueFontSize: 18,
-                    selectedTab: $selectedTab
-                )
-            }
-            .padding(.horizontal)
-            
-            // Realized Profit Chart
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Realized Profit by Month")
-                    .font(.manrope(20, weight: .semiBold))
-                    .padding(.horizontal)
+                .padding(.horizontal)
+                .padding(.top, 8)
                 
-                if profitByMonth.isEmpty {
-                    // Empty state for chart
-                    VStack(spacing: 16) {
-                        Image(systemName: "chart.bar")
-                            .font(.system(size: 40))
-                            .foregroundColor(.themeSecondaryText)
-                        Text("No realized profit yet")
-                            .font(.manrope(.body))
-                            .foregroundColor(.themeSecondaryText)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 200)
-                } else {
-                    Chart(profitByMonth) { item in
-                        BarMark(
-                            x: .value("Month", item.month, unit: .month),
-                            y: .value("Profit", item.profit)
-                        )
-                        .foregroundStyle(item.profit >= 0 ? Color.themeGold : Color.themeLoss)
-                        .cornerRadius(6)
-                        .opacity(selectedMonth == nil || Calendar.current.isDate(selectedMonth!, equalTo: item.month, toGranularity: .month) ? 1.0 : 0.3)
-                    }
-                    .chartXAxis {
-                        AxisMarks(values: .stride(by: .month)) { value in
-                            if let date = value.as(Date.self) {
-                                AxisValueLabel {
-                                    Text(date, format: .dateTime.month(.abbreviated))
-                                        .foregroundStyle(.white)
-                                }
-                            }
-                        }
-                    }
-                    .chartYAxis {
-                        AxisMarks(position: .leading) { value in
-                            AxisValueLabel {
-                                if let profit = value.as(Double.self) {
-                                    Text("$\(profit, specifier: "%.0f")")
-                                        .foregroundStyle(.white)
-                                }
-                            }
-                        }
-                    }
-                    .chartXSelection(value: $selectedMonth)
-                    .frame(height: 200)
-                    .padding(.horizontal)
+                // MARK: - Hero: Net Profit & ROI
+                HStack(spacing: 12) {
+                    // Net Profit hero card
+                    FlippableHeroCard(
+                        label: "Net Profit",
+                        value: formattedProfit,
+                        valueColor: totalProfit >= 0 ? .themeGold : .themeLoss,
+                        monthLabel: "This month",
+                        monthValue: netProfitMonthChange,
+                        selectedTab: $selectedTab
+                    )
                     
-                    // Display selected month profit
-                    if let selectedMonth = selectedMonth,
-                       let selectedData = profitByMonth.first(where: { Calendar.current.isDate($0.month, equalTo: selectedMonth, toGranularity: .month) }) {
-                        VStack(spacing: 8) {
-                            Text(selectedData.month, format: .dateTime.month(.wide).year())
-                                .font(.manrope(16, weight: .semiBold))
-                            HStack(spacing: 4) {
-                                Text("Profit:")
-                                    .font(.manrope(.body))
+                    // ROI hero card
+                    FlippableHeroCard(
+                        label: "ROI",
+                        value: formattedROI,
+                        valueColor: totalExpenses > 0 && totalSales >= totalExpenses ? .themeGold : .themeLoss,
+                        monthLabel: "YTD ROI",
+                        monthValue: yearToDateROI,
+                        selectedTab: $selectedTab
+                    )
+                }
+                .padding(.horizontal)
+                
+                // MARK: - Secondary Stats (compact 2x2)
+                VStack(spacing: 8) {
+                    HStack(spacing: 8) {
+                        CompactStatCard(
+                            icon: "lanyardcard",
+                            title: "Cards",
+                            value: "\(inventoryCards.count)",
+                            monthChange: cardsMonthChange
+                        )
+                        CompactStatCard(
+                            icon: "cube.box",
+                            title: "Sealed",
+                            value: "\(inventorySealedProducts.count)",
+                            monthChange: sealedMonthChange
+                        )
+                    }
+                    HStack(spacing: 8) {
+                        CompactStatCard(
+                            icon: "storefront",
+                            title: "Inventory",
+                            value: String(format: "$%.0f", totalCards + totalProducts),
+                            monthChange: inventoryMonthChange
+                        )
+                        CompactStatCard(
+                            icon: "shippingbox",
+                            title: "Sold",
+                            value: "\(totalSoldCount)",
+                            monthChange: soldMonthChange
+                        )
+                    }
+                }
+                .padding(.horizontal)
+                
+                // MARK: - Realized Profit Chart
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Realized profit")
+                        .font(.manrope(18, weight: .semiBold))
+                        .padding(.horizontal)
+                    
+                    if profitByMonth.isEmpty {
+                        VStack(spacing: 12) {
+                            Image(systemName: "chart.bar")
+                                .font(.system(size: 36))
+                                .foregroundColor(.themeSecondaryText.opacity(0.4))
+                            Text("No realized profit yet")
+                                .font(.manrope(14))
+                                .foregroundColor(.themeSecondaryText.opacity(0.6))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 180)
+                    } else {
+                        Chart(profitByMonth) { item in
+                            BarMark(
+                                x: .value("Month", item.month, unit: .month),
+                                y: .value("Profit", item.profit)
+                            )
+                            .foregroundStyle(item.profit >= 0 ? Color.themeGold : Color.themeLoss)
+                            .cornerRadius(4)
+                            .opacity(selectedMonth == nil || Calendar.current.isDate(selectedMonth!, equalTo: item.month, toGranularity: .month) ? 1.0 : 0.3)
+                        }
+                        .chartXAxis {
+                            AxisMarks(values: .stride(by: .month)) { value in
+                                if let date = value.as(Date.self) {
+                                    AxisValueLabel {
+                                        Text(date, format: .dateTime.month(.abbreviated))
+                                            .font(.manrope(10))
+                                            .foregroundStyle(Color.themeSecondaryText.opacity(0.7))
+                                    }
+                                }
+                            }
+                        }
+                        .chartYAxis {
+                            AxisMarks(position: .leading) { value in
+                                AxisValueLabel {
+                                    if let profit = value.as(Double.self) {
+                                        Text("$\(profit, specifier: "%.0f")")
+                                            .font(.manrope(10))
+                                            .foregroundStyle(Color.themeSecondaryText.opacity(0.7))
+                                    }
+                                }
+                            }
+                        }
+                        .chartXSelection(value: $selectedMonth)
+                        .frame(height: 180)
+                        .padding(.horizontal)
+                        
+                        if let selectedMonth = selectedMonth,
+                           let selectedData = profitByMonth.first(where: { Calendar.current.isDate($0.month, equalTo: selectedMonth, toGranularity: .month) }) {
+                            HStack {
+                                Text(selectedData.month, format: .dateTime.month(.abbreviated).year())
+                                    .font(.manrope(13, weight: .medium))
                                     .foregroundColor(.themeSecondaryText)
+                                Spacer()
                                 Text(selectedData.profit >= 0 ? "+$\(selectedData.profit, specifier: "%.2f")" : "-$\(abs(selectedData.profit), specifier: "%.2f")")
-                                    .font(.manrope(18, weight: .bold))
+                                    .font(.manrope(16, weight: .bold))
                                     .foregroundColor(selectedData.profit >= 0 ? .themeGold : .themeLoss)
                             }
+                            .padding(.horizontal)
+                            .padding(.vertical, 8)
+                            .transition(.opacity)
                         }
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(Color.themeCardBackground)
-                        .cornerRadius(12)
-                        .padding(.horizontal)
-                        .transition(.opacity)
+                    }
+                }
+                .padding(.vertical, 16)
+                .background(Color.themeCardBackground.opacity(0.5))
+                .cornerRadius(16)
+                .padding(.horizontal)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation {
+                        selectedMonth = nil
                     }
                 }
             }
-            .padding(.vertical)
-            .background(Color.themeRowBackground)
-            .cornerRadius(16)
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.themeGold.opacity(0.15), lineWidth: 1)
-            )
-            .padding(.horizontal)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                // Tap outside the chart to deselect
-                withAnimation {
-                    selectedMonth = nil
-                }
-            }
-            
-            Spacer()
+            .padding(.bottom, 16)
         }
+        .scrollIndicators(.hidden)
         .background(Color.themeBackground)
         .onChange(of: selectedTab) { _, _ in
             selectedMonth = nil

@@ -608,74 +608,87 @@ extension Array where Element == MiscExpense {
 // MARK: - Photo Picker Section
 struct PhotoPickerSection: View {
     @Binding var photoData: Data?
-    
+
     @State private var selectedItem: PhotosPickerItem?
-    @State private var showingSourcePicker = false
     @State private var showingCamera = false
-    
+
+    private var hasPhoto: Bool {
+        photoData != nil
+    }
+
     var body: some View {
         Section {
-            if let photoData, let uiImage = UIImage(data: photoData) {
-                VStack(spacing: 12) {
+            VStack(spacing: 12) {
+                if let data = photoData, let uiImage = UIImage(data: data) {
                     Image(uiImage: uiImage)
                         .resizable()
                         .scaledToFit()
                         .frame(maxHeight: 200)
                         .cornerRadius(8)
                         .frame(maxWidth: .infinity)
-                    
-                    HStack(spacing: 16) {
-                        Button {
-                            showingSourcePicker = true
-                        } label: {
-                            Label("Replace", systemImage: "arrow.triangle.2.circlepath.camera")
+                }
+
+                HStack(spacing: 16) {
+                    if hasPhoto {
+                        PhotosPicker(selection: $selectedItem, matching: .images) {
+                            Label("Replace", systemImage: "photo.on.rectangle")
                                 .font(.manrope(13, weight: .medium))
                         }
-                        
+
+                        Button {
+                            showingCamera = true
+                        } label: {
+                            Label("Retake", systemImage: "camera")
+                                .font(.manrope(13, weight: .medium))
+                        }
+
                         Button(role: .destructive) {
-                            withAnimation {
-                                self.photoData = nil
-                            }
+                            photoData = nil
                         } label: {
                             Label("Remove", systemImage: "trash")
                                 .font(.manrope(13, weight: .medium))
                         }
-                    }
-                }
-                .padding(.vertical, 8)
-                .listRowBackground(Color.themeRowBackground)
-            } else {
-                Button {
-                    showingSourcePicker = true
-                } label: {
-                    HStack {
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 20))
+                    } else {
+                        PhotosPicker(selection: $selectedItem, matching: .images) {
+                            HStack(spacing: 8) {
+                                Image(systemName: "photo.on.rectangle")
+                                    .font(.system(size: 16))
+                                Text("Library")
+                                    .font(.manrope(14, weight: .medium))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(Color.themeGold.opacity(0.12))
                             .foregroundColor(.themeGold)
-                        Text("Add Photo")
-                            .font(.manrope(16, weight: .medium))
-                            .foregroundColor(.themePrimaryText)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.themeSecondaryText)
+                            .cornerRadius(8)
+                        }
+                        .buttonStyle(.plain)
+
+                        Button {
+                            showingCamera = true
+                        } label: {
+                            HStack(spacing: 8) {
+                                Image(systemName: "camera.fill")
+                                    .font(.system(size: 16))
+                                Text("Camera")
+                                    .font(.manrope(14, weight: .medium))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(Color.themeGold.opacity(0.12))
+                            .foregroundColor(.themeGold)
+                            .cornerRadius(8)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
-                .listRowBackground(Color.themeRowBackground)
             }
+            .padding(.vertical, 8)
+            .listRowBackground(Color.themeRowBackground)
         } header: {
             Text("Photo")
                 .textCase(nil)
                 .foregroundColor(.themeSecondaryText)
-        }
-        .confirmationDialog("Add Photo", isPresented: $showingSourcePicker) {
-            Button("Take Photo") {
-                showingCamera = true
-            }
-            PhotosPicker(selection: $selectedItem, matching: .images) {
-                Text("Choose from Library")
-            }
-            Button("Cancel", role: .cancel) { }
         }
         .fullScreenCover(isPresented: $showingCamera) {
             CameraView(photoData: $photoData)
@@ -685,7 +698,6 @@ struct PhotoPickerSection: View {
             if let newItem {
                 Task {
                     if let data = try? await newItem.loadTransferable(type: Data.self) {
-                        // Compress the image to save storage
                         if let uiImage = UIImage(data: data),
                            let compressed = uiImage.jpegData(compressionQuality: 0.7) {
                             photoData = compressed
