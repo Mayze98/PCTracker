@@ -24,7 +24,10 @@ struct EditCardView: View {
     @State private var saleDate: Date
     @State private var purchaseDate: Date
     @State private var photoData: Data?
-    
+    @State private var showingCamera = false
+    @State private var showingLibraryPicker = false
+    @State private var selectedPhotoItem: PhotosPickerItem?
+
     init(card: Cards) {
         self.card = card
         _name = State(initialValue: card.name)
@@ -149,7 +152,7 @@ struct EditCardView: View {
                         .foregroundColor(.themeSecondaryText)
                 }
                 
-                PhotoPickerSection(photoData: $photoData)
+                PhotoPickerSection(photoData: $photoData, onLibraryRequested: { showingLibraryPicker = true }, onCameraRequested: { showingCamera = true })
             }
             .foregroundColor(.themePrimaryText)
             .scrollContentBackground(.hidden)
@@ -170,6 +173,24 @@ struct EditCardView: View {
                     }
                     .bold()
                     .disabled(name.isEmpty || buyPrice.isEmpty)
+                }
+            }
+            .fullScreenCover(isPresented: $showingCamera) {
+                CameraView { data in photoData = data }
+                    .ignoresSafeArea()
+            }
+            .photosPicker(isPresented: $showingLibraryPicker, selection: $selectedPhotoItem, matching: .images, photoLibrary: .shared())
+            .onChange(of: selectedPhotoItem) { _, newItem in
+                guard let newItem else { return }
+                Task {
+                    if let data = try? await newItem.loadTransferable(type: Data.self) {
+                        if let uiImage = UIImage(data: data), let compressed = uiImage.jpegData(compressionQuality: 0.7) {
+                            await MainActor.run { photoData = compressed }
+                        } else {
+                            await MainActor.run { photoData = data }
+                        }
+                    }
+                    await MainActor.run { selectedPhotoItem = nil }
                 }
             }
         }

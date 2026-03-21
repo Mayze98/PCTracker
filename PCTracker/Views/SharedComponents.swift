@@ -606,15 +606,15 @@ extension Array where Element == MiscExpense {
 }
 
 // MARK: - Photo Picker Section
+
 struct PhotoPickerSection: View {
     @Binding var photoData: Data?
-
-    @State private var selectedItem: PhotosPickerItem?
-    @State private var showingCamera = false
-
-    private var hasPhoto: Bool {
-        photoData != nil
-    }
+    /// Called when the user taps Library/Replace. The owning form presents
+    /// the picker at its own NavigationStack level.
+    var onLibraryRequested: () -> Void
+    /// Called when the user taps Camera/Retake. The owning form presents
+    /// the camera sheet at its own NavigationStack level.
+    var onCameraRequested: () -> Void
 
     var body: some View {
         Section {
@@ -626,30 +626,48 @@ struct PhotoPickerSection: View {
                         .frame(maxHeight: 200)
                         .cornerRadius(8)
                         .frame(maxWidth: .infinity)
-                }
 
-                HStack(spacing: 16) {
-                    if hasPhoto {
-                        PhotosPicker(selection: $selectedItem, matching: .images) {
+                    HStack(spacing: 0) {
+                        Button {
+                            onLibraryRequested()
+                        } label: {
                             Label("Replace", systemImage: "photo.on.rectangle")
                                 .font(.manrope(13, weight: .medium))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
                         }
+                        .buttonStyle(.plain)
+
+                        Divider().frame(height: 20)
 
                         Button {
-                            showingCamera = true
+                            onCameraRequested()
                         } label: {
                             Label("Retake", systemImage: "camera")
                                 .font(.manrope(13, weight: .medium))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
                         }
+                        .buttonStyle(.plain)
 
-                        Button(role: .destructive) {
+                        Divider().frame(height: 20)
+
+                        Button {
                             photoData = nil
                         } label: {
                             Label("Remove", systemImage: "trash")
                                 .font(.manrope(13, weight: .medium))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                                .foregroundColor(.red)
                         }
-                    } else {
-                        PhotosPicker(selection: $selectedItem, matching: .images) {
+                        .buttonStyle(.plain)
+                    }
+                } else {
+                    HStack(spacing: 12) {
+                        Button {
+                            onLibraryRequested()
+                        } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "photo.on.rectangle")
                                     .font(.system(size: 16))
@@ -665,7 +683,7 @@ struct PhotoPickerSection: View {
                         .buttonStyle(.plain)
 
                         Button {
-                            showingCamera = true
+                            onCameraRequested()
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "camera.fill")
@@ -690,67 +708,45 @@ struct PhotoPickerSection: View {
                 .textCase(nil)
                 .foregroundColor(.themeSecondaryText)
         }
-        .fullScreenCover(isPresented: $showingCamera) {
-            CameraView(photoData: $photoData)
-                .ignoresSafeArea()
-        }
-        .onChange(of: selectedItem) { _, newItem in
-            if let newItem {
-                Task {
-                    if let data = try? await newItem.loadTransferable(type: Data.self) {
-                        if let uiImage = UIImage(data: data),
-                           let compressed = uiImage.jpegData(compressionQuality: 0.7) {
-                            photoData = compressed
-                        } else {
-                            photoData = data
-                        }
-                    }
-                    selectedItem = nil
-                }
-            }
-        }
     }
 }
 
 // MARK: - Camera View (UIKit wrapper)
-
 struct CameraView: UIViewControllerRepresentable {
-    @Binding var photoData: Data?
+    /// Called only when the user confirms a photo. Never called on cancel.
+    let onCapture: (Data) -> Void
+
     @Environment(\.dismiss) private var dismiss
-    
+
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
         picker.sourceType = .camera
         picker.delegate = context.coordinator
         return picker
     }
-    
+
     func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-    
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-    
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
     class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
         let parent: CameraView
-        
-        init(_ parent: CameraView) {
-            self.parent = parent
-        }
-        
+        init(_ parent: CameraView) { self.parent = parent }
+
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
             if let image = info[.originalImage] as? UIImage,
                let data = image.jpegData(compressionQuality: 0.7) {
-                parent.photoData = data
+                parent.onCapture(data)
             }
             parent.dismiss()
         }
-        
+
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
             parent.dismiss()
         }
     }
 }
+
 
 // MARK: - Photo Thumbnail for Row Views
 
