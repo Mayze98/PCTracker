@@ -12,6 +12,7 @@ import SwiftData
 struct AddSalePriceView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @AppStorage("currencyCode") private var currencyCode: String = "CAD"
     
     let item: SellableItem
     @State private var salePrice: String = ""
@@ -59,7 +60,7 @@ struct AddSalePriceView: View {
                         Text("Buy Price")
                             .font(.manrope(.caption, weight: .medium))
                             .foregroundColor(.themeSecondaryText)
-                        Text("$\(item.buyPrice, format: .number.precision(.fractionLength(2)))")
+                        Text(CurrencyFormatter.convertedString(item.buyPrice, code: currencyCode))
                             .font(.manrope(.headline, weight: .semiBold))
                     }
                     .padding(.vertical, 4)
@@ -68,7 +69,7 @@ struct AddSalePriceView: View {
                 
                 Section {
                     HStack {
-                        Text("$")
+                        Text(CurrencyFormatter.symbol(for: currencyCode))
                             .foregroundColor(.themeSecondaryText)
                         TextField("0.00", text: $salePrice)
                             .keyboardType(.decimalPad)
@@ -80,11 +81,12 @@ struct AddSalePriceView: View {
                         .listRowBackground(Color.themeRowBackground)
                     
                     if let price = Double(salePrice), price > 0 {
-                        let profit = price - item.buyPrice
+                        let displayBuyPrice = CurrencyFormatter.displayAmount(item.buyPrice, displayCode: currencyCode)
+                        let profit = price - displayBuyPrice
                         HStack {
                             Text("Profit")
                             Spacer()
-                            Text("\(profit >= 0 ? "+" : "")$\(profit, format: .number.precision(.fractionLength(2)))")
+                            Text(CurrencyFormatter.signedString(profit, code: currencyCode, minFraction: 2, maxFraction: 2))
                                 .foregroundColor(profit >= 0 ? .themeGold : .themeLoss)
                                 .bold()
                         }
@@ -133,12 +135,14 @@ struct AddSalePriceView: View {
             return
         }
         
+        let storedPrice = CurrencyFormatter.toStorageAmount(price, fromCode: currencyCode)
+        
         switch item {
         case .card(let card):
-            card.salePrice = price
+            card.salePrice = storedPrice
             card.saleDate = saleDate
         case .product(let product):
-            product.salePrice = price
+            product.salePrice = storedPrice
             product.saleDate = saleDate
         }
         

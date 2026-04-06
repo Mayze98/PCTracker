@@ -5,6 +5,7 @@
 //
 //  Created by John on 2026-02-26.
 //
+import Foundation
 import SwiftData
 import SwiftUI
 import CloudKit
@@ -12,72 +13,80 @@ import UniformTypeIdentifiers
 
 // MARK: - CSV Export Helper
 class CSVExporter {
-    static func generateInventoryCSV(cards: [Cards], sealedProducts: [SealedProduct]) -> String {
-        var csv = "Type,Name,Number,Condition/Graded,Buy Price,Purchase Date\n"
+    
+    /// Converts a stored CAD value to the current display currency for export.
+    private static func displayPrice(_ storedValue: Double, code: String) -> String {
+        let displayed = CurrencyFormatter.displayAmount(storedValue, displayCode: code)
+        return String(format: "%.2f", displayed)
+    }
+    
+    static func generateInventoryCSV(cards: [Cards], sealedProducts: [SealedProduct], currencyCode: String) -> String {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .short
+        
+        var csv = "Type,Name,Number,Card Set,Condition/Graded,Buy Price (\(currencyCode)),Market Price (\(currencyCode)),Purchase Date\n"
         
         // Add cards
         for card in cards {
             let conditionText = card.graded ? "GRADED" : card.condition
-            let buyPrice = card.buyPrice
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateStyle = .short
+            let buyPrice = displayPrice(card.buyPrice, code: currencyCode)
+            let marketPrice = card.marketPrice != nil ? displayPrice(card.marketPrice!, code: currencyCode) : ""
             let dateStr = dateFormatter.string(from: card.purchaseDate)
             let number = card.number ?? ""
+            let cardSet = card.cardSet ?? ""
             
-            csv += "Card,\"\(card.name)\",\"\(number)\",\"\(conditionText)\",\(buyPrice),\(dateStr)\n"
+            csv += "Card,\"\(card.name)\",\"\(number)\",\"\(cardSet)\",\"\(conditionText)\",\(buyPrice),\(marketPrice),\(dateStr)\n"
         }
         
         // Add sealed products
         for product in sealedProducts {
-            let buyPrice = product.buyPrice
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateStyle = .short
+            let buyPrice = displayPrice(product.buyPrice, code: currencyCode)
             let dateStr = dateFormatter.string(from: product.purchaseDate)
             let expansion = product.expansion ?? ""
             
-            csv += "Sealed Product,\"\(product.name) - \(expansion)\",,N/A,\(buyPrice),\(dateStr)\n"
+            csv += "Sealed Product,\"\(product.name)\",,,\"\(expansion)\",\(buyPrice),,\(dateStr)\n"
         }
         
         return csv
     }
     
-    static func generateArchiveCSV(cards: [Cards], sealedProducts: [SealedProduct], miscExpenses: [MiscExpense]) -> String {
-        var csv = "Type,Name,Number,Condition/Graded,Buy Price,Sale Price,Profit,Purchase Date\n"
+    static func generateArchiveCSV(cards: [Cards], sealedProducts: [SealedProduct], miscExpenses: [MiscExpense], currencyCode: String) -> String {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateStyle = .short
+        
+        var csv = "Type,Name,Number,Card Set,Condition/Graded,Buy Price (\(currencyCode)),Sale Price (\(currencyCode)),Profit (\(currencyCode)),Purchase Date,Sale Date\n"
         
         // Add sold cards
         for card in cards {
             let conditionText = card.graded ? "GRADED" : card.condition
-            let buyPrice = card.buyPrice
-            let salePrice = card.salePrice ?? 0.0
-            let profit = card.profit ?? 0
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateStyle = .short
+            let buyPrice = displayPrice(card.buyPrice, code: currencyCode)
+            let salePrice = card.salePrice != nil ? displayPrice(card.salePrice!, code: currencyCode) : "0.00"
+            let profit = card.profit != nil ? displayPrice(card.profit!, code: currencyCode) : "0.00"
             let dateStr = dateFormatter.string(from: card.purchaseDate)
+            let saleDateStr = card.saleDate != nil ? dateFormatter.string(from: card.saleDate!) : ""
             let number = card.number ?? ""
+            let cardSet = card.cardSet ?? ""
             
-            csv += "Card,\"\(card.name)\",\"\(number)\",\"\(conditionText)\",\(buyPrice),\(salePrice),\(profit),\(dateStr)\n"
+            csv += "Card,\"\(card.name)\",\"\(number)\",\"\(cardSet)\",\"\(conditionText)\",\(buyPrice),\(salePrice),\(profit),\(dateStr),\(saleDateStr)\n"
         }
         
         // Add sold sealed products
         for product in sealedProducts {
-            let buyPrice = product.buyPrice
-            let salePrice = product.salePrice ?? 0.0
-            let profit = product.profit ?? 0
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateStyle = .short
+            let buyPrice = displayPrice(product.buyPrice, code: currencyCode)
+            let salePrice = product.salePrice != nil ? displayPrice(product.salePrice!, code: currencyCode) : "0.00"
+            let profit = product.profit != nil ? displayPrice(product.profit!, code: currencyCode) : "0.00"
             let dateStr = dateFormatter.string(from: product.purchaseDate)
+            let saleDateStr = product.saleDate != nil ? dateFormatter.string(from: product.saleDate!) : ""
             let expansion = product.expansion ?? ""
             
-            csv += "Sealed Product,\"\(product.name) - \(expansion)\",,N/A,\(buyPrice),\(salePrice),\(profit),\(dateStr)\n"
+            csv += "Sealed Product,\"\(product.name)\",,,\"\(expansion)\",\(buyPrice),\(salePrice),\(profit),\(dateStr),\(saleDateStr)\n"
         }
         
         // Add misc expenses
         csv += "\nMisc Expenses\n"
-        csv += "Description,Cost,Purchase Date,Notes\n"
+        csv += "Description,Cost (\(currencyCode)),Purchase Date,Notes\n"
         for expense in miscExpenses {
-            let cost = expense.cost
-            let dateFormatter = DateFormatter()
-            dateFormatter.dateStyle = .short
+            let cost = displayPrice(expense.cost, code: currencyCode)
             let dateStr = dateFormatter.string(from: expense.purchaseDate)
             let notes = expense.notes?.replacingOccurrences(of: "\"", with: "\"\"") ?? ""
             
@@ -97,6 +106,9 @@ struct SettingsView: View {
     @Query private var miscExpenses: [MiscExpense]
     
     @AppStorage("isDarkMode") private var isDarkMode: Bool = true
+    @AppStorage("currencyCode") private var currencyCode: String = "CAD"
+    @AppStorage("usdToCadRate") private var usdToCadRate: Double = 1.35
+    @AppStorage("usdToCadRateUpdatedAt") private var usdToCadRateUpdatedAt: Double = 0
     @State private var showingExportSheet = false
     @State private var showingShareSheet = false
     @State private var exportType: ExportType = .inventory
@@ -108,6 +120,7 @@ struct SettingsView: View {
     @State private var importInProgress = false
     @Environment(\.modelContext) private var modelContext
     @State private var importedCount: Int = 0
+
     
     enum ExportType {
         case inventory
@@ -155,13 +168,37 @@ struct SettingsView: View {
                 }
                 
                 Section {
-                    HStack {
+                    VStack(alignment: .leading, spacing: 10) {
                         Text("Currency")
+                            .font(.manrope(.subheadline, weight: .medium))
+                            .foregroundColor(.themeSecondaryText)
+
+                        Picker("Currency", selection: $currencyCode) {
+                            Text("USD").tag("USD")
+                            Text("CAD").tag("CAD")
+                        }
+                        .pickerStyle(.segmented)
+                    }
+                    .listRowBackground(Color.themeRowBackground)
+
+                    HStack {
+                        Text("USD to CAD Rate")
                         Spacer()
-                        Text("CAD")
+                        Text(usdToCadRate, format: .number.precision(.fractionLength(4)))
                             .foregroundColor(.themeSecondaryText)
                     }
                     .listRowBackground(Color.themeRowBackground)
+
+                    if usdToCadRateUpdatedAt > 0 {
+                        HStack {
+                            Text("Rate Updated")
+                            Spacer()
+                            Text(Date(timeIntervalSince1970: usdToCadRateUpdatedAt), format: .dateTime.month().day().year().hour().minute())
+                                .foregroundColor(.themeSecondaryText)
+                        }
+                        .listRowBackground(Color.themeRowBackground)
+                    }
+
                     Toggle("Dark Mode", isOn: $isDarkMode)
                         .listRowBackground(Color.themeRowBackground)
                 } header: {
@@ -228,15 +265,15 @@ struct SettingsView: View {
                 .scrollContentBackground(.hidden)
                 .background(Color.themeBackground)
                 
-            }
-            .navigationTitle("")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar(.hidden, for: .navigationBar)
-            .tint(.themeGold)
-            .preferredColorScheme(isDarkMode ? .dark : .light)
-            .sheet(isPresented: $showingShareSheet) {
-                ShareSheet(activityItems: [csvData])
-            }
+        }
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
+        .tint(.themeGold)
+        .preferredColorScheme(isDarkMode ? .dark : .light)
+        .sheet(isPresented: $showingShareSheet) {
+            ShareSheet(activityItems: [csvData])
+        }
             .fileImporter(
                 isPresented: $showingImporter,
                 allowedContentTypes: [.commaSeparatedText],
@@ -263,7 +300,7 @@ struct SettingsView: View {
             }
         }
     }
-    
+
     private func checkiCloudStatus() {
         // CloudKit is currently disabled
         // To enable: Configure iCloud capability in Xcode project settings
@@ -309,11 +346,11 @@ struct SettingsView: View {
         case .inventory:
             let inventoryCards = allCards.filter { $0.salePrice == nil }
             let inventoryProducts = allSealedProducts.filter { $0.salePrice == nil }
-            csvData = CSVExporter.generateInventoryCSV(cards: inventoryCards, sealedProducts: inventoryProducts)
+            csvData = CSVExporter.generateInventoryCSV(cards: inventoryCards, sealedProducts: inventoryProducts, currencyCode: currencyCode)
         case .archive:
             let archivedCards = allCards.filter { $0.salePrice != nil }
             let archivedProducts = allSealedProducts.filter { $0.salePrice != nil }
-            csvData = CSVExporter.generateArchiveCSV(cards: archivedCards, sealedProducts: archivedProducts, miscExpenses: miscExpenses)
+            csvData = CSVExporter.generateArchiveCSV(cards: archivedCards, sealedProducts: archivedProducts, miscExpenses: miscExpenses, currencyCode: currencyCode)
         }
         
         showingShareSheet = true
@@ -384,6 +421,5 @@ struct ShareSheet: UIViewControllerRepresentable {
 
 #Preview {
     SettingsView(selectedTab: .constant(4))
-        .modelContainer(for: [Cards.self, SealedProduct.self, MiscExpense.self], inMemory: true)
+        .modelContainer(previewContainer)
 }
-

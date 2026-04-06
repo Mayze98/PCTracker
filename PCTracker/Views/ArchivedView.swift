@@ -15,6 +15,7 @@ struct ArchivedView: View {
     @Query private var allCards: [Cards]
     @Query private var allSealedProducts: [SealedProduct]
     @Query private var miscExpenses: [MiscExpense]
+    @AppStorage("currencyCode") private var currencyCode: String = "CAD"
     
     @State private var selectedCard: Cards?
     @State private var selectedProduct: SealedProduct?
@@ -265,7 +266,7 @@ struct ArchivedView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Archived")
                         .font(.manrope(24, weight: .bold))
-                    Text("Total Profit: $\(totalProfit, specifier: "%.2f")")
+                    Text("Total Profit: \(CurrencyFormatter.convertedString(totalProfit, code: currencyCode, minFraction: 2, maxFraction: 2))")
                         .font(.manrope(15, weight: .medium))
                         .foregroundColor(totalProfit >= 0 ? .themeGold : .themeLoss)
                 }
@@ -721,6 +722,7 @@ struct ArchivedFilterView: View {
     @Binding var useDateFilter: Bool
     @Binding var startDate: Date
     @Binding var endDate: Date
+    @AppStorage("currencyCode") private var currencyCode: String = "CAD"
     
     let availableConditions = ["GRADED", "NM", "LP", "MP", "HP", "DMG"]
     
@@ -805,7 +807,7 @@ struct ArchivedFilterView: View {
                                         .font(.manrope(.caption, weight: .medium))
                                         .foregroundColor(.themeSecondaryText)
                                     HStack(spacing: 4) {
-                                        Text("$")
+                                        Text(CurrencyFormatter.symbol(for: currencyCode))
                                             .foregroundColor(.themeSecondaryText)
                                         TextField("0", value: $minBuyPrice, format: .number.precision(.fractionLength(0)))
                                             .keyboardType(.numberPad)
@@ -818,7 +820,7 @@ struct ArchivedFilterView: View {
                                         .font(.manrope(.caption, weight: .medium))
                                         .foregroundColor(.themeSecondaryText)
                                     HStack(spacing: 4) {
-                                        Text("$")
+                                        Text(CurrencyFormatter.symbol(for: currencyCode))
                                             .foregroundColor(.themeSecondaryText)
                                         TextField("10000", value: $maxBuyPrice, format: .number.precision(.fractionLength(0)))
                                             .keyboardType(.numberPad)
@@ -852,7 +854,7 @@ struct ArchivedFilterView: View {
                                         .font(.manrope(.caption, weight: .medium))
                                         .foregroundColor(.themeSecondaryText)
                                     HStack(spacing: 4) {
-                                        Text("$")
+                                        Text(CurrencyFormatter.symbol(for: currencyCode))
                                             .foregroundColor(.themeSecondaryText)
                                         TextField("-500", value: $minProfit, format: .number.precision(.fractionLength(0)))
                                             .keyboardType(.numberPad)
@@ -865,7 +867,7 @@ struct ArchivedFilterView: View {
                                         .font(.manrope(.caption, weight: .medium))
                                         .foregroundColor(.themeSecondaryText)
                                     HStack(spacing: 4) {
-                                        Text("$")
+                                        Text(CurrencyFormatter.symbol(for: currencyCode))
                                             .foregroundColor(.themeSecondaryText)
                                         TextField("5000", value: $maxProfit, format: .number.precision(.fractionLength(0)))
                                             .keyboardType(.numberPad)
@@ -926,6 +928,5 @@ struct ArchivedFilterView: View {
 
 #Preview {
     ArchivedView(selectedTab: .constant(3))
-        .modelContainer(for: [Cards.self, SealedProduct.self, MiscExpense.self], inMemory: true)
+        .modelContainer(previewContainer)
 }
-

@@ -14,6 +14,7 @@ struct InventoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var allCards: [Cards]
     @Query private var allSealedProducts: [SealedProduct]
+    @AppStorage("currencyCode") private var currencyCode: String = "CAD"
     
     @State private var selectedCard: Cards?
     @State private var selectedProduct: SealedProduct?
@@ -23,6 +24,8 @@ struct InventoryView: View {
     @State private var selectedProducts: Set<SealedProduct.ID> = []
     @State private var showingDeleteConfirmation: Bool = false
     @State private var showingFilters: Bool = false
+    @State private var isRefreshingPrices = false
+    @State private var refreshProgress: (current: Int, total: Int) = (0, 0)
     
     // Filter state
     @State private var filterItemType: Set<ItemType> = [.cards, .sealedProducts]
@@ -39,6 +42,7 @@ struct InventoryView: View {
     
     enum SortOption: String, CaseIterable, Identifiable {
         case buyPrice = "Buy Price"
+        case marketPrice = "Market Price"
         case name = "Name"
         case date = "Date"
         
@@ -67,6 +71,8 @@ struct InventoryView: View {
             switch sortOption {
             case .buyPrice:
                 return sortAscending ? lhs.buyPrice < rhs.buyPrice : lhs.buyPrice > rhs.buyPrice
+            case .marketPrice:
+                return sortAscending ? (lhs.marketPrice ?? 0) < (rhs.marketPrice ?? 0) : (lhs.marketPrice ?? 0) > (rhs.marketPrice ?? 0)
             case .name:
                 return sortAscending ? lhs.name < rhs.name : lhs.name > rhs.name
             case .date:
@@ -78,7 +84,7 @@ struct InventoryView: View {
     private func sortSealedProducts(_ products: [SealedProduct]) -> [SealedProduct] {
         products.sorted { lhs, rhs in
             switch sortOption {
-            case .buyPrice:
+            case .buyPrice, .marketPrice:
                 return sortAscending ? lhs.buyPrice < rhs.buyPrice : lhs.buyPrice > rhs.buyPrice
             case .name:
                 return sortAscending ? lhs.name < rhs.name : lhs.name > rhs.name
@@ -188,9 +194,29 @@ struct InventoryView: View {
             VStack(spacing: 0) {
                 // Header
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Inventory")
-                        .font(.manrope(24, weight: .bold))
-                    Text("$\(totalCards + totalProducts, format: .number.precision(.fractionLength(2)))")
+                    HStack {
+                        Text("Inventory")
+                            .font(.manrope(24, weight: .bold))
+                        Spacer()
+                        if isRefreshingPrices {
+                            HStack(spacing: 4) {
+                                ProgressView()
+                                    .tint(.themeGold)
+                                Text("\(refreshProgress.current)/\(refreshProgress.total)")
+                                    .font(.manrope(.caption))
+                                    .foregroundColor(.themeSecondaryText)
+                            }
+                        } else {
+                            Button {
+                                refreshAllPrices()
+                            } label: {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.themeGold)
+                            }
+                        }
+                    }
+                    Text(CurrencyFormatter.convertedString(totalCards + totalProducts, code: currencyCode))
                         .font(.manrope(15, weight: .medium))
                         .foregroundColor(.themeSecondaryText)
                 }
@@ -514,6 +540,40 @@ struct InventoryView: View {
         }
     }
     
+    private func refreshAllPrices() {
+        let cardsToRefresh = cards.filter { $0.isMarketPriceStale }
+        guard !cardsToRefresh.isEmpty else { return }
+        
+        isRefreshingPrices = true
+        refreshProgress = (0, cardsToRefresh.count)
+        
+        Task {
+            for (index, card) in cardsToRefresh.enumerated() {
+                do {
+                    let price = try await PokemonTCGService.fetchMarketPrice(
+                        name: card.name,
+                        number: card.number
+                    )
+                    await MainActor.run {
+                        if let price {
+                            card.marketPrice = price
+                            card.marketPriceDate = Date()
+                        }
+                        refreshProgress.current = index + 1
+                    }
+                    // Rate limit: 200ms between requests
+                    try await Task.sleep(for: .milliseconds(200))
+                } catch {
+                    continue
+                }
+            }
+            await MainActor.run {
+                try? modelContext.save()
+                isRefreshingPrices = false
+            }
+        }
+    }
+    
     private func deleteSelectedItems() {
         // Delete selected cards
         for cardID in selectedCards {
@@ -546,6 +606,7 @@ struct InventoryFilterView: View {
     @Binding var usePriceFilter: Bool
     @Binding var minPrice: Double
     @Binding var maxPrice: Double
+    @AppStorage("currencyCode") private var currencyCode: String = "CAD"
     
     @State private var useDateFilter: Bool = false
     @State private var startDate: Date = Calendar.current.date(byAdding: .month, value: -1, to: Date()) ?? Date()
@@ -631,7 +692,7 @@ struct InventoryFilterView: View {
                                         .font(.manrope(.caption, weight: .medium))
                                         .foregroundColor(.themeSecondaryText)
                                     HStack(spacing: 4) {
-                                        Text("$")
+                                        Text(CurrencyFormatter.symbol(for: currencyCode))
                                             .foregroundColor(.themeSecondaryText)
                                         TextField("0", value: $minPrice, format: .number.precision(.fractionLength(0)))
                                             .keyboardType(.numberPad)
@@ -644,7 +705,7 @@ struct InventoryFilterView: View {
                                         .font(.manrope(.caption, weight: .medium))
                                         .foregroundColor(.themeSecondaryText)
                                     HStack(spacing: 4) {
-                                        Text("$")
+                                        Text(CurrencyFormatter.symbol(for: currencyCode))
                                             .foregroundColor(.themeSecondaryText)
                                         TextField("10000", value: $maxPrice, format: .number.precision(.fractionLength(0)))
                                             .keyboardType(.numberPad)
@@ -726,5 +787,5 @@ struct InventoryFilterView: View {
 
 #Preview {
     InventoryView(selectedTab: .constant(1))
-        .modelContainer(for: [Cards.self, SealedProduct.self, MiscExpense.self], inMemory: true)
+        .modelContainer(previewContainer)
 }

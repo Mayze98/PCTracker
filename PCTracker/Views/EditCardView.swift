@@ -12,11 +12,13 @@ import PhotosUI
 struct EditCardView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @AppStorage("currencyCode") private var currencyCode: String = "CAD"
     
     let card: Cards
     
     @State private var name: String
     @State private var number: String
+    @State private var cardSet: String
     @State private var graded: Bool
     @State private var condition: String
     @State private var buyPrice: String
@@ -27,15 +29,21 @@ struct EditCardView: View {
     @State private var showingCamera = false
     @State private var showingLibraryPicker = false
     @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var isFetchingPrice = false
+    @State private var priceError: String?
+    @State private var showingSearch = false
+    @State private var isLoadingImage = false
 
     init(card: Cards) {
         self.card = card
+        let displayCode = UserDefaults.standard.string(forKey: "currencyCode") ?? "CAD"
         _name = State(initialValue: card.name)
         _number = State(initialValue: card.number ?? "")
+        _cardSet = State(initialValue: card.cardSet ?? "")
         _graded = State(initialValue: card.graded)
         _condition = State(initialValue: card.condition)
-        _buyPrice = State(initialValue: String(format: "%.2f", card.buyPrice))
-        _salePrice = State(initialValue: card.salePrice != nil ? String(format: "%.2f", card.salePrice!) : "")
+        _buyPrice = State(initialValue: String(format: "%.2f", CurrencyFormatter.displayAmount(card.buyPrice, displayCode: displayCode)))
+        _salePrice = State(initialValue: card.salePrice != nil ? String(format: "%.2f", CurrencyFormatter.displayAmount(card.salePrice!, displayCode: displayCode)) : "")
         _saleDate = State(initialValue: card.saleDate ?? Date())
         _purchaseDate = State(initialValue: card.purchaseDate)
         _photoData = State(initialValue: card.photoData)
@@ -46,6 +54,26 @@ struct EditCardView: View {
     var body: some View {
         NavigationStack {
             Form {
+                // Search button at the top
+                Section {
+                    Button {
+                        showingSearch = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(.themeGold)
+                            Text("Search Card")
+                                .font(.manrope(16, weight: .semiBold))
+                                .foregroundColor(.themeGold)
+                            Spacer()
+                            Text("Update card info")
+                                .font(.manrope(13, weight: .regular))
+                                .foregroundColor(.themeSecondaryText.opacity(0.6))
+                        }
+                    }
+                    .listRowBackground(Color.themeGold.opacity(0.08))
+                }
+                
                 Section {
                     HStack {
                         Text("Card Name")
@@ -62,6 +90,16 @@ struct EditCardView: View {
                             .foregroundColor(.themePrimaryText)
                         Spacer()
                         TextField("", text: $number)
+                            .multilineTextAlignment(.trailing)
+                            .autocorrectionDisabled()
+                            .autocapitalization(.none)
+                    }
+                    .listRowBackground(Color.themeRowBackground)
+                    HStack {
+                        Text("Card Set")
+                            .foregroundColor(.themePrimaryText)
+                        Spacer()
+                        TextField("Optional", text: $cardSet)
                             .multilineTextAlignment(.trailing)
                             .autocorrectionDisabled()
                             .autocapitalization(.none)
@@ -96,7 +134,7 @@ struct EditCardView: View {
                     HStack {
                         Text("Buy Price")
                         Spacer()
-                        Text("$")
+                        Text(CurrencyFormatter.symbol(for: currencyCode))
                             .foregroundColor(.themeSecondaryText)
                         TextField("0.00", text: $buyPrice)
                             .keyboardType(.decimalPad)
@@ -108,7 +146,7 @@ struct EditCardView: View {
                     HStack {
                         Text("Sale Price")
                         Spacer()
-                        Text("$")
+                        Text(CurrencyFormatter.symbol(for: currencyCode))
                             .foregroundColor(.themeSecondaryText)
                         TextField("Optional", text: $salePrice)
                             .keyboardType(.decimalPad)
@@ -130,7 +168,7 @@ struct EditCardView: View {
                         HStack {
                             Text("Profit")
                             Spacer()
-                            Text("\(profit >= 0 ? "+" : "")$\(profit, format: .number.precision(.fractionLength(2)))")
+                            Text(CurrencyFormatter.signedString(profit, code: currencyCode, minFraction: 2, maxFraction: 2))
                                 .foregroundColor(profit >= 0 ? .themeGold : .themeLoss)
                                 .bold()
                         }
@@ -138,6 +176,69 @@ struct EditCardView: View {
                     }
                 } header: {
                     Text("Pricing")
+                        .textCase(nil)
+                        .foregroundColor(.themeSecondaryText)
+                }
+                
+                Section {
+                    if let marketPrice = card.marketPrice {
+                        HStack {
+                            Text("Market Price")
+                            Spacer()
+                            Text(CurrencyFormatter.convertedString(marketPrice, code: currencyCode))
+                                .foregroundColor(.themeGold)
+                                .bold()
+                        }
+                        .listRowBackground(Color.themeRowBackground)
+                        
+                        if let marketProfit = card.marketProfit {
+                            HStack {
+                                Text("Unrealized P/L")
+                                Spacer()
+                                Text(CurrencyFormatter.convertedSignedString(marketProfit, code: currencyCode))
+                                    .foregroundColor(marketProfit >= 0 ? .themeGold : .themeLoss)
+                                    .bold()
+                            }
+                            .listRowBackground(Color.themeRowBackground)
+                        }
+                        
+                        if let date = card.marketPriceDate {
+                            HStack {
+                                Text("Last Updated")
+                                Spacer()
+                                Text(date, format: .dateTime.month().day().hour().minute())
+                                    .foregroundColor(.themeSecondaryText)
+                            }
+                            .listRowBackground(Color.themeRowBackground)
+                        }
+                    }
+                    
+                    Button {
+                        fetchMarketPrice()
+                    } label: {
+                        HStack {
+                            if isFetchingPrice {
+                                ProgressView()
+                                    .tint(.themeGold)
+                                Text("Fetching...")
+                            } else {
+                                Image(systemName: "arrow.triangle.2.circlepath")
+                                Text(card.marketPrice == nil ? "Check Market Price" : "Refresh Price")
+                            }
+                        }
+                        .foregroundColor(.themeGold)
+                    }
+                    .disabled(isFetchingPrice)
+                    .listRowBackground(Color.themeRowBackground)
+                    
+                    if let error = priceError {
+                        Text(error)
+                            .font(.manrope(.caption))
+                            .foregroundColor(.themeLoss)
+                            .listRowBackground(Color.themeRowBackground)
+                    }
+                } header: {
+                    Text("Market Price")
                         .textCase(nil)
                         .foregroundColor(.themeSecondaryText)
                 }
@@ -175,6 +276,11 @@ struct EditCardView: View {
                     .disabled(name.isEmpty || buyPrice.isEmpty)
                 }
             }
+            .sheet(isPresented: $showingSearch) {
+                CardSearchView { result in
+                    applySearchResult(result)
+                }
+            }
             .fullScreenCover(isPresented: $showingCamera) {
                 CameraView { data in photoData = data }
                     .ignoresSafeArea()
@@ -196,21 +302,79 @@ struct EditCardView: View {
         }
     }
     
+    private func applySearchResult(_ result: CardSearchResult) {
+        name = result.name
+        number = result.number
+        cardSet = result.setName
+        
+        // Update market price directly on the card model
+        if let price = result.marketPrice {
+            card.marketPrice = price
+            card.marketPriceDate = Date()
+        }
+        
+        // Download card image from API
+        if let urlString = result.imageURL, let url = URL(string: urlString) {
+            isLoadingImage = true
+            Task {
+                if let (data, _) = try? await URLSession.shared.data(from: url) {
+                    await MainActor.run {
+                        photoData = data
+                        isLoadingImage = false
+                    }
+                } else {
+                    await MainActor.run {
+                        isLoadingImage = false
+                    }
+                }
+            }
+        }
+    }
+    
+    private func fetchMarketPrice() {
+        isFetchingPrice = true
+        priceError = nil
+        Task {
+            do {
+                let price = try await PokemonTCGService.fetchMarketPrice(
+                    name: name,
+                    number: number.isEmpty ? nil : number
+                )
+                await MainActor.run {
+                    if let price {
+                        card.marketPrice = price
+                        card.marketPriceDate = Date()
+                        try? modelContext.save()
+                    } else {
+                        priceError = "No market price found for this card"
+                    }
+                    isFetchingPrice = false
+                }
+            } catch {
+                await MainActor.run {
+                    priceError = "Failed to fetch price"
+                    isFetchingPrice = false
+                }
+            }
+        }
+    }
+    
     private func saveChanges() {
         guard let buyPriceValue = Double(buyPrice) else { return }
         
         card.name = name
         card.number = number.isEmpty ? nil : number
+        card.cardSet = cardSet.isEmpty ? nil : cardSet
         card.graded = graded
         card.condition = graded ? "GRADED" : condition
-        card.buyPrice = buyPriceValue
+        card.buyPrice = CurrencyFormatter.toStorageAmount(buyPriceValue, fromCode: currencyCode)
         
         // Handle sale price and sale date
         if salePrice.isEmpty {
             card.salePrice = nil
             card.saleDate = nil
         } else if let salePriceValue = Double(salePrice) {
-            card.salePrice = salePriceValue
+            card.salePrice = CurrencyFormatter.toStorageAmount(salePriceValue, fromCode: currencyCode)
             card.saleDate = saleDate
         }
         
@@ -229,9 +393,9 @@ struct EditCardView: View {
 
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: Cards.self, configurations: config)
+    let container = try! ModelContainer(for: Cards.self, SealedProduct.self, MiscExpense.self, configurations: config)
     
-    let sampleCard = Cards(name: "Pikachu", number: "25", graded: false, condition: "NM", buyPrice: 10.00)
+    let sampleCard = Cards(name: "Pikachu VMAX", number: "044/185", graded: false, condition: "NM", buyPrice: 45.00, marketPrice: 62.50, marketPriceDate: Date())
     container.mainContext.insert(sampleCard)
     
     return EditCardView(card: sampleCard)

@@ -13,6 +13,7 @@ import SwiftUI
 class Cards {
     var name: String
     var number: String?
+    var cardSet: String?
     var graded: Bool
     var condition: String  // Store condition as simple String
     var buyPrice: Double
@@ -20,10 +21,13 @@ class Cards {
     var saleDate: Date?
     var purchaseDate: Date
     @Attribute(.externalStorage) var photoData: Data?
+    var marketPrice: Double?
+    var marketPriceDate: Date?
     
-    init(name: String, number: String? = nil, graded: Bool = false, condition: String = "NM", buyPrice: Double, salePrice: Double? = nil, saleDate: Date? = nil, purchaseDate: Date = Date(), photoData: Data? = nil) {
+    init(name: String, number: String? = nil, cardSet: String? = nil, graded: Bool = false, condition: String = "NM", buyPrice: Double, salePrice: Double? = nil, saleDate: Date? = nil, purchaseDate: Date = Date(), photoData: Data? = nil, marketPrice: Double? = nil, marketPriceDate: Date? = nil) {
         self.name = name
         self.number = number
+        self.cardSet = cardSet
         self.graded = graded
         self.condition = condition
         self.buyPrice = buyPrice
@@ -31,6 +35,20 @@ class Cards {
         self.saleDate = saleDate
         self.purchaseDate = purchaseDate
         self.photoData = photoData
+        self.marketPrice = marketPrice
+        self.marketPriceDate = marketPriceDate
+    }
+    
+    // Unrealized profit/loss based on market price vs buy price
+    var marketProfit: Double? {
+        guard let market = marketPrice else { return nil }
+        return market - buyPrice
+    }
+    
+    // Whether the cached market price is stale (older than 24 hours)
+    var isMarketPriceStale: Bool {
+        guard let date = marketPriceDate else { return true }
+        return Date().timeIntervalSince(date) > 86400
     }
     
     // if the card has a profit

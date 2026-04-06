@@ -12,6 +12,7 @@ import PhotosUI
 struct EditMiscExpenseView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @AppStorage("currencyCode") private var currencyCode: String = "CAD"
     
     let expense: MiscExpense
     
@@ -26,8 +27,9 @@ struct EditMiscExpenseView: View {
 
     init(expense: MiscExpense) {
         self.expense = expense
+        let displayCode = UserDefaults.standard.string(forKey: "currencyCode") ?? "CAD"
         _itemDescription = State(initialValue: expense.itemDescription)
-        _cost = State(initialValue: String(format: "%.2f", expense.cost))
+        _cost = State(initialValue: String(format: "%.2f", CurrencyFormatter.displayAmount(expense.cost, displayCode: displayCode)))
         _purchaseDate = State(initialValue: expense.purchaseDate)
         _notes = State(initialValue: expense.notes ?? "")
         _photoData = State(initialValue: expense.photoData)
@@ -51,7 +53,7 @@ struct EditMiscExpenseView: View {
                     HStack {
                         Text("Cost")
                         Spacer()
-                        Text("$")
+                        Text(CurrencyFormatter.symbol(for: currencyCode))
                             .foregroundColor(.themeSecondaryText)
                         TextField("0.00", text: $cost)
                             .keyboardType(.decimalPad)
@@ -135,7 +137,7 @@ struct EditMiscExpenseView: View {
         guard let costValue = Double(cost) else { return }
         
         expense.itemDescription = itemDescription
-        expense.cost = costValue
+        expense.cost = CurrencyFormatter.toStorageAmount(costValue, fromCode: currencyCode)
         expense.purchaseDate = purchaseDate
         expense.notes = notes.isEmpty ? nil : notes
         expense.photoData = photoData

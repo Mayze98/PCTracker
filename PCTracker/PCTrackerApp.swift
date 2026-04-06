@@ -64,6 +64,10 @@ struct PCTrackerApp: App {
         WindowGroup {
             ContentView()
                 .preferredColorScheme(isDarkMode ? .dark : .light)
+                .task {
+                    // Refresh the USD→CAD exchange rate in the background at launch
+                    try? await PokemonTCGService.getUsdToCadRate()
+                }
         }
         .modelContainer(sharedModelContainer)
     }

@@ -12,6 +12,7 @@ import PhotosUI
 struct EditSealedProductView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @AppStorage("currencyCode") private var currencyCode: String = "CAD"
     
     let product: SealedProduct
     
@@ -25,13 +26,16 @@ struct EditSealedProductView: View {
     @State private var showingCamera = false
     @State private var showingLibraryPicker = false
     @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var showingSetSearch = false
+    @State private var isLoadingImage = false
 
     init(product: SealedProduct) {
         self.product = product
+        let displayCode = UserDefaults.standard.string(forKey: "currencyCode") ?? "CAD"
         _name = State(initialValue: product.name)
         _expansion = State(initialValue: product.expansion ?? "")
-        _buyPrice = State(initialValue: String(format: "%.2f", product.buyPrice))
-        _salePrice = State(initialValue: product.salePrice != nil ? String(format: "%.2f", product.salePrice!) : "")
+        _buyPrice = State(initialValue: String(format: "%.2f", CurrencyFormatter.displayAmount(product.buyPrice, displayCode: displayCode)))
+        _salePrice = State(initialValue: product.salePrice != nil ? String(format: "%.2f", CurrencyFormatter.displayAmount(product.salePrice!, displayCode: displayCode)) : "")
         _saleDate = State(initialValue: product.saleDate ?? Date())
         _purchaseDate = State(initialValue: product.purchaseDate)
         _photoData = State(initialValue: product.photoData)
@@ -40,6 +44,26 @@ struct EditSealedProductView: View {
     var body: some View {
         NavigationStack {
             Form {
+                // Search button at the top
+                Section {
+                    Button {
+                        showingSetSearch = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(.themeGold)
+                            Text("Search Set")
+                                .font(.manrope(16, weight: .semiBold))
+                                .foregroundColor(.themeGold)
+                            Spacer()
+                            Text("Update set info")
+                                .font(.manrope(13, weight: .regular))
+                                .foregroundColor(.themeSecondaryText.opacity(0.6))
+                        }
+                    }
+                    .listRowBackground(Color.themeGold.opacity(0.08))
+                }
+                
                 Section {
                     HStack {
                         Text("Product Name")
@@ -71,7 +95,7 @@ struct EditSealedProductView: View {
                     HStack {
                         Text("Buy Price")
                         Spacer()
-                        Text("$")
+                        Text(CurrencyFormatter.symbol(for: currencyCode))
                             .foregroundColor(.themeSecondaryText)
                         TextField("0.00", text: $buyPrice)
                             .keyboardType(.decimalPad)
@@ -83,7 +107,7 @@ struct EditSealedProductView: View {
                     HStack {
                         Text("Sale Price")
                         Spacer()
-                        Text("$")
+                        Text(CurrencyFormatter.symbol(for: currencyCode))
                             .foregroundColor(.themeSecondaryText)
                         TextField("Optional", text: $salePrice)
                             .keyboardType(.decimalPad)
@@ -105,7 +129,7 @@ struct EditSealedProductView: View {
                         HStack {
                             Text("Profit")
                             Spacer()
-                            Text("\(profit >= 0 ? "+" : "")$\(profit, format: .number.precision(.fractionLength(2)))")
+                            Text(CurrencyFormatter.signedString(profit, code: currencyCode, minFraction: 2, maxFraction: 2))
                                 .foregroundColor(profit >= 0 ? .themeGold : .themeLoss)
                                 .bold()
                         }
@@ -150,6 +174,11 @@ struct EditSealedProductView: View {
                     .disabled(name.isEmpty || buyPrice.isEmpty)
                 }
             }
+            .sheet(isPresented: $showingSetSearch) {
+                SetSearchView { result in
+                    applySetResult(result)
+                }
+            }
             .fullScreenCover(isPresented: $showingCamera) {
                 CameraView { data in photoData = data }
                     .ignoresSafeArea()
@@ -171,19 +200,40 @@ struct EditSealedProductView: View {
         }
     }
     
+    private func applySetResult(_ result: SetSearchResult) {
+        expansion = result.name
+        
+        // Download set logo image
+        if let urlString = result.logoURL, let url = URL(string: urlString) {
+            isLoadingImage = true
+            Task {
+                if let (data, _) = try? await URLSession.shared.data(from: url) {
+                    await MainActor.run {
+                        photoData = data
+                        isLoadingImage = false
+                    }
+                } else {
+                    await MainActor.run {
+                        isLoadingImage = false
+                    }
+                }
+            }
+        }
+    }
+    
     private func saveChanges() {
         guard let buyPriceValue = Double(buyPrice) else { return }
         
         product.name = name
         product.expansion = expansion.isEmpty ? nil : expansion
-        product.buyPrice = buyPriceValue
+        product.buyPrice = CurrencyFormatter.toStorageAmount(buyPriceValue, fromCode: currencyCode)
         
         // Handle sale price and sale date
         if salePrice.isEmpty {
             product.salePrice = nil
             product.saleDate = nil
         } else if let salePriceValue = Double(salePrice) {
-            product.salePrice = salePriceValue
+            product.salePrice = CurrencyFormatter.toStorageAmount(salePriceValue, fromCode: currencyCode)
             product.saleDate = saleDate
         }
         

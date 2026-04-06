@@ -51,6 +51,6 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
-        .modelContainer(for: [Cards.self, SealedProduct.self, MiscExpense.self], inMemory: true)
+        .modelContainer(previewContainer)
 }
 

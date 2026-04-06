@@ -134,12 +134,40 @@ public struct CSVImporter {
         return result
     }
     
+    /// Detects the currency code from a header column like "Buy Price (CAD)" or "Buy Price (USD)".
+    /// Returns "CAD" if no currency code is found.
+    private static func detectCurrency(from header: [String]) -> String {
+        for col in header {
+            if let match = col.range(of: "\\(([A-Z]{3})\\)", options: .regularExpression) {
+                return String(col[match]).replacingOccurrences(of: "(", with: "").replacingOccurrences(of: ")", with: "")
+            }
+        }
+        return "CAD"
+    }
+    
+    /// Converts an imported price to the storage currency (CAD).
+    private static func toStorage(_ value: Double, fromCode: String) -> Double {
+        return CurrencyFormatter.toStorageAmount(value, fromCode: fromCode)
+    }
+    
+    /// Checks if a header matches the expected column names, ignoring currency suffixes like " (CAD)".
+    private static func headerMatches(_ header: [String], expected: [String]) -> Bool {
+        guard header.count == expected.count else { return false }
+        for (h, e) in zip(header, expected) {
+            // Strip currency suffix for comparison: "Buy Price (CAD)" -> "Buy Price"
+            let stripped = h.replacingOccurrences(of: "\\s*\\([A-Z]{3}\\)", with: "", options: .regularExpression)
+            if stripped != e { return false }
+        }
+        return true
+    }
+    
     /// Imports an Inventory CSV file into the given ModelContext.
     ///
-    /// The CSV file is expected to have the following header columns (case-sensitive):
-    /// `Type,Name,Number,Condition/Graded,Buy Price,Purchase Date`
+    /// Supports both the new format with Card Set, Market Price, and currency codes:
+    /// `Type,Name,Number,Card Set,Condition/Graded,Buy Price (CAD),Market Price (CAD),Purchase Date`
     ///
-    /// Rows with type "Card" or "Sealed Product" (case-insensitive) will be imported.
+    /// And the legacy format:
+    /// `Type,Name,Number,Condition/Graded,Buy Price,Purchase Date`
     ///
     /// - Parameters:
     ///   - url: The file URL of the CSV file to import.
@@ -147,32 +175,51 @@ public struct CSVImporter {
     /// - Throws: CSVImportError or other errors related to file reading or context saving.
     public static func importInventoryCSV(from url: URL, into context: ModelContext) async throws {
         let content = try String(contentsOf: url, encoding: .utf8)
-        // Normalize line endings to \n
         let normalizedContent = content.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
         let rows = parseCSV(normalizedContent)
-        guard !rows.isEmpty else { throw CSVImportError.invalidHeader(expected: ["Type", "Name", "Number", "Condition/Graded", "Buy Price", "Purchase Date"], found: []) }
+        guard !rows.isEmpty else { throw CSVImportError.invalidHeader(expected: ["Type", "Name", "Number", "Card Set", "Condition/Graded", "Buy Price", "Market Price", "Purchase Date"], found: []) }
         
         let header = rows[0].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        let expectedHeader = ["Type", "Name", "Number", "Condition/Graded", "Buy Price", "Purchase Date"]
-        guard header == expectedHeader else {
-            throw CSVImportError.invalidHeader(expected: expectedHeader, found: header)
+        let newExpected = ["Type", "Name", "Number", "Card Set", "Condition/Graded", "Buy Price", "Market Price", "Purchase Date"]
+        let legacyExpected = ["Type", "Name", "Number", "Condition/Graded", "Buy Price", "Purchase Date"]
+        
+        let isNewFormat = headerMatches(header, expected: newExpected)
+        let isLegacyFormat = header == legacyExpected
+        
+        guard isNewFormat || isLegacyFormat else {
+            throw CSVImportError.invalidHeader(expected: newExpected, found: header)
         }
+        
+        let importCurrency = isNewFormat ? detectCurrency(from: header) : "CAD"
         
         for idx in 1..<rows.count {
             let row = rows[idx]
-            if row.count < expectedHeader.count {
-                throw CSVImportError.invalidRow
+            if row.isEmpty || row.allSatisfy({ $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+                continue
             }
             let fields = row.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             let type = fields[0].lowercased()
             
-            switch type {
-            case "card":
-                try await insertCardInventoryRow(fields: fields, context: context)
-            case "sealed product":
-                try await insertSealedProductInventoryRow(fields: fields, context: context)
-            default:
-                throw CSVImportError.unknownType(fields[0])
+            if isNewFormat {
+                guard fields.count >= newExpected.count else { throw CSVImportError.invalidRow }
+                switch type {
+                case "card":
+                    try await insertCardInventoryRowNew(fields: fields, currency: importCurrency, context: context)
+                case "sealed product":
+                    try await insertSealedProductInventoryRowNew(fields: fields, currency: importCurrency, context: context)
+                default:
+                    throw CSVImportError.unknownType(fields[0])
+                }
+            } else {
+                guard fields.count >= legacyExpected.count else { throw CSVImportError.invalidRow }
+                switch type {
+                case "card":
+                    try await insertCardInventoryRow(fields: fields, context: context)
+                case "sealed product":
+                    try await insertSealedProductInventoryRow(fields: fields, context: context)
+                default:
+                    throw CSVImportError.unknownType(fields[0])
+                }
             }
         }
         
@@ -181,13 +228,14 @@ public struct CSVImporter {
     
     /// Imports an Archive CSV file into the given ModelContext.
     ///
-    /// The CSV file is expected to have the following header columns (case-sensitive):
+    /// Supports both the new format with Card Set, Sale Date, and currency codes:
+    /// `Type,Name,Number,Card Set,Condition/Graded,Buy Price (CAD),Sale Price (CAD),Profit (CAD),Purchase Date,Sale Date`
+    ///
+    /// And the legacy format:
     /// `Type,Name,Number,Condition/Graded,Buy Price,Sale Price,Profit,Purchase Date`
     ///
-    /// Rows with type "Card" or "Sealed Product" (case-insensitive) will be imported.
-    ///
     /// Optionally includes a Misc Expenses section with header:
-    /// `Description,Cost,Purchase Date,Notes`
+    /// `Description,Cost (CAD),Purchase Date,Notes`
     ///
     /// The Profit column is ignored (computed).
     ///
@@ -197,16 +245,22 @@ public struct CSVImporter {
     /// - Throws: CSVImportError or other errors related to file reading or context saving.
     public static func importArchiveCSV(from url: URL, into context: ModelContext) async throws {
         let content = try String(contentsOf: url, encoding: .utf8)
-        // Normalize line endings to \n
         let normalizedContent = content.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
         let rows = parseCSV(normalizedContent)
-        guard !rows.isEmpty else { throw CSVImportError.invalidHeader(expected: ["Type", "Name", "Number", "Condition/Graded", "Buy Price", "Sale Price", "Profit", "Purchase Date"], found: []) }
+        guard !rows.isEmpty else { throw CSVImportError.invalidHeader(expected: ["Type", "Name", "Number", "Card Set", "Condition/Graded", "Buy Price", "Sale Price", "Profit", "Purchase Date", "Sale Date"], found: []) }
         
         let header = rows[0].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        let expectedHeader = ["Type", "Name", "Number", "Condition/Graded", "Buy Price", "Sale Price", "Profit", "Purchase Date"]
-        guard header == expectedHeader else {
-            throw CSVImportError.invalidHeader(expected: expectedHeader, found: header)
+        let newExpected = ["Type", "Name", "Number", "Card Set", "Condition/Graded", "Buy Price", "Sale Price", "Profit", "Purchase Date", "Sale Date"]
+        let legacyExpected = ["Type", "Name", "Number", "Condition/Graded", "Buy Price", "Sale Price", "Profit", "Purchase Date"]
+        
+        let isNewFormat = headerMatches(header, expected: newExpected)
+        let isLegacyFormat = header == legacyExpected
+        
+        guard isNewFormat || isLegacyFormat else {
+            throw CSVImportError.invalidHeader(expected: newExpected, found: header)
         }
+        
+        let importCurrency = isNewFormat ? detectCurrency(from: header) : "CAD"
         
         var inMiscExpensesSection = false
         var miscExpensesHeaderFound = false
@@ -235,25 +289,33 @@ public struct CSVImporter {
             
             // Process rows based on section
             if inMiscExpensesSection && miscExpensesHeaderFound {
-                // Process misc expense row
                 if row.count >= 3 {
-                    try await insertMiscExpenseRow(fields: row.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }, context: context)
+                    try await insertMiscExpenseRow(fields: row.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }, currency: importCurrency, context: context)
                 }
             } else if !inMiscExpensesSection {
-                // Process cards/sealed products
-                if row.count < expectedHeader.count {
-                    throw CSVImportError.invalidRow
-                }
                 let fields = row.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 let type = fields[0].lowercased()
                 
-                switch type {
-                case "card":
-                    try await insertCardArchiveRow(fields: fields, context: context)
-                case "sealed product":
-                    try await insertSealedProductArchiveRow(fields: fields, context: context)
-                default:
-                    throw CSVImportError.unknownType(fields[0])
+                if isNewFormat {
+                    guard fields.count >= newExpected.count else { throw CSVImportError.invalidRow }
+                    switch type {
+                    case "card":
+                        try await insertCardArchiveRowNew(fields: fields, currency: importCurrency, context: context)
+                    case "sealed product":
+                        try await insertSealedProductArchiveRowNew(fields: fields, currency: importCurrency, context: context)
+                    default:
+                        throw CSVImportError.unknownType(fields[0])
+                    }
+                } else {
+                    guard fields.count >= legacyExpected.count else { throw CSVImportError.invalidRow }
+                    switch type {
+                    case "card":
+                        try await insertCardArchiveRow(fields: fields, context: context)
+                    case "sealed product":
+                        try await insertSealedProductArchiveRow(fields: fields, context: context)
+                    default:
+                        throw CSVImportError.unknownType(fields[0])
+                    }
                 }
             }
         }
@@ -425,7 +487,197 @@ public struct CSVImporter {
         context.insert(sealed)
     }
     
-    private static func insertMiscExpenseRow(fields: [String], context: ModelContext) async throws {
+    // MARK: - New format helpers (with Card Set, Market Price, Sale Date, currency conversion)
+    
+    private static func insertCardInventoryRowNew(fields: [String], currency: String, context: ModelContext) async throws {
+        // Type(0), Name(1), Number(2), Card Set(3), Condition/Graded(4), Buy Price(5), Market Price(6), Purchase Date(7)
+        let name = fields[1]
+        let numberField = fields[2]
+        let number: String? = numberField.isEmpty ? nil : numberField
+        let cardSetField = fields[3]
+        let cardSet: String? = cardSetField.isEmpty ? nil : cardSetField
+        let conditionText = fields[4]
+        let buyPriceString = fields[5]
+        let marketPriceString = fields[6]
+        let purchaseDateString = fields[7]
+        
+        guard !name.isEmpty else { throw CSVImportError.missingRequiredField("Name") }
+        guard !buyPriceString.isEmpty else { throw CSVImportError.missingRequiredField("Buy Price") }
+        guard !purchaseDateString.isEmpty else { throw CSVImportError.missingRequiredField("Purchase Date") }
+        
+        guard let buyPrice = parseDouble(buyPriceString) else {
+            throw CSVImportError.numberParseFailed(buyPriceString)
+        }
+        
+        var marketPrice: Double? = nil
+        if !marketPriceString.isEmpty, let mp = parseDouble(marketPriceString) {
+            marketPrice = toStorage(mp, fromCode: currency)
+        }
+        
+        guard let purchaseDate = parseDate(purchaseDateString) else {
+            throw CSVImportError.dateParseFailed(purchaseDateString)
+        }
+        
+        let graded: Bool
+        let condition: String
+        if conditionText.uppercased() == "GRADED" {
+            graded = true
+            condition = ""
+        } else {
+            graded = false
+            condition = conditionText.isEmpty ? "NM" : conditionText
+        }
+        
+        let card = Cards(
+            name: name,
+            number: number,
+            cardSet: cardSet,
+            graded: graded,
+            condition: condition,
+            buyPrice: toStorage(buyPrice, fromCode: currency),
+            purchaseDate: purchaseDate,
+            marketPrice: marketPrice,
+            marketPriceDate: marketPrice != nil ? Date() : nil
+        )
+        context.insert(card)
+    }
+    
+    private static func insertSealedProductInventoryRowNew(fields: [String], currency: String, context: ModelContext) async throws {
+        // Type(0), Name(1), Number(2), Card Set(3), Condition/Graded(4), Buy Price(5), Market Price(6), Purchase Date(7)
+        // For sealed products: Name(1) is the product name, Condition/Graded(4) holds the expansion
+        let name = fields[1]
+        let expansionField = fields[4]
+        let expansion: String? = expansionField.isEmpty || expansionField == "N/A" ? nil : expansionField
+        let buyPriceString = fields[5]
+        let purchaseDateString = fields[7]
+        
+        guard !name.isEmpty else { throw CSVImportError.missingRequiredField("Name") }
+        guard !buyPriceString.isEmpty else { throw CSVImportError.missingRequiredField("Buy Price") }
+        guard !purchaseDateString.isEmpty else { throw CSVImportError.missingRequiredField("Purchase Date") }
+        
+        guard let buyPrice = parseDouble(buyPriceString) else {
+            throw CSVImportError.numberParseFailed(buyPriceString)
+        }
+        
+        guard let purchaseDate = parseDate(purchaseDateString) else {
+            throw CSVImportError.dateParseFailed(purchaseDateString)
+        }
+        
+        let sealed = SealedProduct(
+            name: name,
+            expansion: expansion ?? "",
+            buyPrice: toStorage(buyPrice, fromCode: currency),
+            purchaseDate: purchaseDate
+        )
+        context.insert(sealed)
+    }
+    
+    private static func insertCardArchiveRowNew(fields: [String], currency: String, context: ModelContext) async throws {
+        // Type(0), Name(1), Number(2), Card Set(3), Condition/Graded(4), Buy Price(5), Sale Price(6), Profit(7), Purchase Date(8), Sale Date(9)
+        let name = fields[1]
+        let numberField = fields[2]
+        let number: String? = numberField.isEmpty ? nil : numberField
+        let cardSetField = fields[3]
+        let cardSet: String? = cardSetField.isEmpty ? nil : cardSetField
+        let conditionText = fields[4]
+        let buyPriceString = fields[5]
+        let salePriceString = fields[6]
+        // Profit(7) is ignored — computed
+        let purchaseDateString = fields[8]
+        let saleDateString = fields.count > 9 ? fields[9] : ""
+        
+        guard !name.isEmpty else { throw CSVImportError.missingRequiredField("Name") }
+        guard !buyPriceString.isEmpty else { throw CSVImportError.missingRequiredField("Buy Price") }
+        guard !purchaseDateString.isEmpty else { throw CSVImportError.missingRequiredField("Purchase Date") }
+        
+        guard let buyPrice = parseDouble(buyPriceString) else {
+            throw CSVImportError.numberParseFailed(buyPriceString)
+        }
+        
+        var salePrice: Double? = nil
+        if !salePriceString.isEmpty, let sp = parseDouble(salePriceString) {
+            salePrice = toStorage(sp, fromCode: currency)
+        }
+        
+        guard let purchaseDate = parseDate(purchaseDateString) else {
+            throw CSVImportError.dateParseFailed(purchaseDateString)
+        }
+        
+        var saleDate: Date? = nil
+        if !saleDateString.isEmpty {
+            saleDate = parseDate(saleDateString)
+        }
+        
+        let graded: Bool
+        let condition: String
+        if conditionText.uppercased() == "GRADED" {
+            graded = true
+            condition = ""
+        } else {
+            graded = false
+            condition = conditionText.isEmpty ? "NM" : conditionText
+        }
+        
+        let card = Cards(
+            name: name,
+            number: number,
+            cardSet: cardSet,
+            graded: graded,
+            condition: condition,
+            buyPrice: toStorage(buyPrice, fromCode: currency),
+            salePrice: salePrice,
+            saleDate: saleDate,
+            purchaseDate: purchaseDate
+        )
+        context.insert(card)
+    }
+    
+    private static func insertSealedProductArchiveRowNew(fields: [String], currency: String, context: ModelContext) async throws {
+        // Type(0), Name(1), Number(2), Card Set(3), Condition/Graded(4), Buy Price(5), Sale Price(6), Profit(7), Purchase Date(8), Sale Date(9)
+        // For sealed products: Condition/Graded(4) holds the expansion
+        let name = fields[1]
+        let expansionField = fields[4]
+        let expansion: String? = expansionField.isEmpty || expansionField == "N/A" ? nil : expansionField
+        let buyPriceString = fields[5]
+        let salePriceString = fields[6]
+        // Profit(7) is ignored
+        let purchaseDateString = fields[8]
+        let saleDateString = fields.count > 9 ? fields[9] : ""
+        
+        guard !name.isEmpty else { throw CSVImportError.missingRequiredField("Name") }
+        guard !buyPriceString.isEmpty else { throw CSVImportError.missingRequiredField("Buy Price") }
+        guard !purchaseDateString.isEmpty else { throw CSVImportError.missingRequiredField("Purchase Date") }
+        
+        guard let buyPrice = parseDouble(buyPriceString) else {
+            throw CSVImportError.numberParseFailed(buyPriceString)
+        }
+        
+        var salePrice: Double? = nil
+        if !salePriceString.isEmpty, let sp = parseDouble(salePriceString) {
+            salePrice = toStorage(sp, fromCode: currency)
+        }
+        
+        guard let purchaseDate = parseDate(purchaseDateString) else {
+            throw CSVImportError.dateParseFailed(purchaseDateString)
+        }
+        
+        var saleDate: Date? = nil
+        if !saleDateString.isEmpty {
+            saleDate = parseDate(saleDateString)
+        }
+        
+        let sealed = SealedProduct(
+            name: name,
+            expansion: expansion ?? "",
+            buyPrice: toStorage(buyPrice, fromCode: currency),
+            salePrice: salePrice,
+            saleDate: saleDate,
+            purchaseDate: purchaseDate
+        )
+        context.insert(sealed)
+    }
+    
+    private static func insertMiscExpenseRow(fields: [String], currency: String, context: ModelContext) async throws {
         // Fields index mapping for misc expenses:
         // Description(0), Cost(1), Purchase Date(2), Notes(3)
         let description = fields[0]
@@ -447,7 +699,7 @@ public struct CSVImporter {
         
         let expense = MiscExpense(
             itemDescription: description,
-            cost: cost,
+            cost: toStorage(cost, fromCode: currency),
             purchaseDate: purchaseDate,
             notes: notes?.isEmpty == false ? notes : nil
         )

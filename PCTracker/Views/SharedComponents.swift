@@ -19,6 +19,7 @@ struct InventoryCardRow: View {
     let onTap: () -> Void
     let onDelete: () -> Void
     let onEdit: () -> Void
+    @AppStorage("currencyCode") private var currencyCode: String = "CAD"
     
     var body: some View {
         HStack {
@@ -65,7 +66,7 @@ struct InventoryCardRow: View {
                     if showProfit, card.salePrice != nil {
                         // Show only profit, ROI %, and sale date for archived items
                         if let profit = card.profit {
-                            Text("\(profit >= 0 ? "+" : "")$\(profit, format: .number.precision(.fractionLength(2)))")
+                            Text(CurrencyFormatter.convertedSignedString(profit, code: currencyCode, minFraction: 2, maxFraction: 2))
                                 .font(.manrope(.subheadline, weight: .medium))
                                 .foregroundColor(profit >= 0 ? .themeGold : .themeLoss)
                             
@@ -88,12 +89,27 @@ struct InventoryCardRow: View {
                         }
                     } else {
                         // Show buy price and purchase date for inventory items
-                        Text("Buy: $\(card.buyPrice, format: .number.precision(.fractionLength(2)))")
+                        Text("Buy: \(CurrencyFormatter.convertedString(card.buyPrice, code: currencyCode, minFraction: 2, maxFraction: 2))")
                             .font(.manrope(.subheadline))
                         
                         Text("\(card.purchaseDate, format: .dateTime.month().day().year())")
                             .font(.manrope(.caption))
                             .foregroundColor(.themeSecondaryText)
+                    }
+                }
+                
+                // Market price line (inventory only)
+                if !showProfit, let marketPrice = card.marketPrice {
+                    HStack(spacing: 4) {
+                        Text("Mkt: \(CurrencyFormatter.convertedString(marketPrice, code: currencyCode))")
+                            .font(.manrope(.caption, weight: .medium))
+                            .foregroundColor(card.isMarketPriceStale ? .themeSecondaryText.opacity(0.5) : .themeSecondaryText)
+                        
+                        if let marketProfit = card.marketProfit {
+                            Text(CurrencyFormatter.convertedSignedString(marketProfit, code: currencyCode))
+                                .font(.manrope(.caption, weight: .medium))
+                                .foregroundColor(marketProfit >= 0 ? .themeGold : .themeLoss)
+                        }
                     }
                 }
             }
@@ -129,6 +145,7 @@ struct InventorySealedProductRow: View {
     let onTap: () -> Void
     let onDelete: () -> Void
     let onEdit: () -> Void
+    @AppStorage("currencyCode") private var currencyCode: String = "CAD"
     
     var body: some View {
         HStack {
@@ -154,7 +171,7 @@ struct InventorySealedProductRow: View {
                     if showProfit, product.salePrice != nil {
                         // Show only profit, ROI %, and sale date for archived items
                         if let profit = product.profit {
-                            Text("\(profit >= 0 ? "+" : "")$\(profit, format: .number.precision(.fractionLength(2)))")
+                            Text(CurrencyFormatter.convertedSignedString(profit, code: currencyCode, minFraction: 2, maxFraction: 2))
                                 .font(.manrope(.subheadline, weight: .medium))
                                 .foregroundColor(profit >= 0 ? .themeGold : .themeLoss)
                             
@@ -177,7 +194,7 @@ struct InventorySealedProductRow: View {
                         }
                     } else {
                         // Show buy price and purchase date for inventory items
-                        Text("Buy: $\(product.buyPrice, format: .number.precision(.fractionLength(2)))")
+                        Text("Buy: \(CurrencyFormatter.convertedString(product.buyPrice, code: currencyCode, minFraction: 2, maxFraction: 2))")
                             .font(.manrope(.subheadline))
                         
                         Text("\(product.purchaseDate, format: .dateTime.month().day().year())")
@@ -217,6 +234,7 @@ struct InventoryMiscExpenseRow: View {
     let onTap: () -> Void
     let onDelete: () -> Void
     let onEdit: () -> Void
+    @AppStorage("currencyCode") private var currencyCode: String = "CAD"
     
     var body: some View {
         HStack {
@@ -240,7 +258,7 @@ struct InventoryMiscExpenseRow: View {
                 }
                 
                 HStack {
-                    Text("Cost: $\(expense.cost, format: .number.precision(.fractionLength(2)))")
+                    Text("Cost: \(CurrencyFormatter.convertedString(expense.cost, code: currencyCode, minFraction: 2, maxFraction: 2))")
                         .font(.manrope(.subheadline, weight: .medium))
                         .foregroundColor(.themeLoss)
                     Text("• \(expense.purchaseDate, format: .dateTime.month().day().year())")
@@ -549,6 +567,8 @@ extension Array where Element == Cards {
                 result = card1.buyPrice < card2.buyPrice
             case "Sale Price":
                 result = (card1.salePrice ?? 0) < (card2.salePrice ?? 0)
+            case "Market Price":
+                result = (card1.marketPrice ?? 0) < (card2.marketPrice ?? 0)
             case "Name":
                 result = card1.name < card2.name
             default:
@@ -765,5 +785,3 @@ struct PhotoThumbnail: View {
         }
     }
 }
-
-

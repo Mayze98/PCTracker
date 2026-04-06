@@ -22,6 +22,7 @@ struct HomeView: View {
     @Query private var allCards: [Cards]
     @Query private var allSealedProducts: [SealedProduct]
     @Query private var miscExpenses: [MiscExpense]
+    @AppStorage("currencyCode") private var currencyCode: String = "CAD"
     
     @State private var selectedMonth: Date?
 
@@ -182,8 +183,7 @@ struct HomeView: View {
             }
         }
         
-        let sign = value > 0 ? "+" : ""
-        return "\(sign)$\(String(format: "%.1f", value))"
+        return CurrencyFormatter.convertedSignedString(value, code: currencyCode, minFraction: 1, maxFraction: 1)
     }
     
     private var netProfitMonthChange: String {
@@ -195,8 +195,7 @@ struct HomeView: View {
         
         let profit = netProfitForMonth(startOfMonth: startOfMonth, endOfMonth: endOfMonth)
         
-        let sign = profit > 0 ? "+" : ""
-        return "\(sign)$\(String(format: "%.1f", profit))"
+        return CurrencyFormatter.convertedSignedString(profit, code: currencyCode, minFraction: 1, maxFraction: 1)
     }
     
     private var yearToDateROI: String {
@@ -236,6 +235,14 @@ struct HomeView: View {
         return "0.00%"
     }
     
+    private var totalMarketValue: Double {
+        inventoryCards.compactMap { $0.marketPrice }.reduce(0, +)
+    }
+    
+    private var cardsWithMarketPrice: Int {
+        inventoryCards.filter { $0.marketPrice != nil }.count
+    }
+    
     private var totalSoldCount: Int {
         soldCards.count + soldSealedProducts.count
     }
@@ -263,9 +270,9 @@ struct HomeView: View {
     private var formattedProfit: String {
         let absProfit = abs(totalProfit)
         if absProfit >= 1000 {
-            return String(format: "$%.0f", totalProfit)
+            return CurrencyFormatter.convertedString(totalProfit, code: currencyCode, minFraction: 0, maxFraction: 0)
         }
-        return String(format: "$%.2f", totalProfit)
+        return CurrencyFormatter.convertedString(totalProfit, code: currencyCode, minFraction: 2, maxFraction: 2)
     }
     
     private var formattedROI: String {
@@ -331,7 +338,7 @@ struct HomeView: View {
                         CompactStatCard(
                             icon: "storefront",
                             title: "Inventory",
-                            value: String(format: "$%.0f", totalCards + totalProducts),
+                            value: CurrencyFormatter.convertedString(totalCards + totalProducts, code: currencyCode, minFraction: 0, maxFraction: 0),
                             monthChange: inventoryMonthChange
                         )
                         CompactStatCard(
@@ -343,6 +350,29 @@ struct HomeView: View {
                     }
                 }
                 .padding(.horizontal)
+                
+                // MARK: - Market Stats
+                if cardsWithMarketPrice > 0 {
+                    HStack(spacing: 8) {
+                        CompactStatCard(
+                            icon: "chart.line.uptrend.xyaxis",
+                            title: "Market Value",
+                            value: CurrencyFormatter.convertedString(totalMarketValue, code: currencyCode, minFraction: 0, maxFraction: 0),
+                            monthChange: "\(cardsWithMarketPrice)/\(inventoryCards.count) priced"
+                        )
+                        CompactStatCard(
+                            icon: "arrow.up.arrow.down",
+                            title: "Unrealized P/L",
+                            value: {
+                                let unrealized = totalMarketValue - totalCards
+                                return CurrencyFormatter.convertedSignedString(unrealized, code: currencyCode, minFraction: 0, maxFraction: 0)
+                            }(),
+                            monthChange: totalCards > 0 ?
+                                String(format: "%.1f%%", ((totalMarketValue - totalCards) / totalCards) * 100) : "--"
+                        )
+                    }
+                    .padding(.horizontal)
+                }
                 
                 // MARK: - Realized Profit Chart
                 VStack(alignment: .leading, spacing: 12) {
@@ -386,7 +416,7 @@ struct HomeView: View {
                             AxisMarks(position: .leading) { value in
                                 AxisValueLabel {
                                     if let profit = value.as(Double.self) {
-                                        Text("$\(profit, specifier: "%.0f")")
+                                        Text(CurrencyFormatter.convertedString(profit, code: currencyCode, minFraction: 0, maxFraction: 0))
                                             .font(.manrope(10))
                                             .foregroundStyle(Color.themeSecondaryText.opacity(0.7))
                                     }
@@ -404,7 +434,7 @@ struct HomeView: View {
                                     .font(.manrope(13, weight: .medium))
                                     .foregroundColor(.themeSecondaryText)
                                 Spacer()
-                                Text(selectedData.profit >= 0 ? "+$\(selectedData.profit, specifier: "%.2f")" : "-$\(abs(selectedData.profit), specifier: "%.2f")")
+                                Text(CurrencyFormatter.convertedSignedString(selectedData.profit, code: currencyCode, minFraction: 2, maxFraction: 2))
                                     .font(.manrope(16, weight: .bold))
                                     .foregroundColor(selectedData.profit >= 0 ? .themeGold : .themeLoss)
                             }
@@ -437,5 +467,5 @@ struct HomeView: View {
 
 #Preview {
     HomeView(selectedTab: .constant(0))
-        .modelContainer(for: [Cards.self, SealedProduct.self, MiscExpense.self], inMemory: true)
+        .modelContainer(previewContainer)
 }
