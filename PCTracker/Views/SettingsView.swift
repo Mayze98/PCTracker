@@ -28,7 +28,7 @@ class CSVExporter {
         
         // Add cards
         for card in cards {
-            let conditionText = card.graded ? "GRADED" : card.condition
+            let conditionText = card.graded ? (card.gradeLevel != nil ? "PSA \(card.gradeLevel!)" : "GRADED") : card.condition
             let buyPrice = displayPrice(card.buyPrice, code: currencyCode)
             let marketPrice = card.marketPrice != nil ? displayPrice(card.marketPrice!, code: currencyCode) : ""
             let dateStr = dateFormatter.string(from: card.purchaseDate)
@@ -58,7 +58,7 @@ class CSVExporter {
         
         // Add sold cards
         for card in cards {
-            let conditionText = card.graded ? "GRADED" : card.condition
+            let conditionText = card.graded ? (card.gradeLevel != nil ? "PSA \(card.gradeLevel!)" : "GRADED") : card.condition
             let buyPrice = displayPrice(card.buyPrice, code: currencyCode)
             let salePrice = card.salePrice != nil ? displayPrice(card.salePrice!, code: currencyCode) : "0.00"
             let profit = card.profit != nil ? displayPrice(card.profit!, code: currencyCode) : "0.00"
@@ -109,10 +109,12 @@ struct SettingsView: View {
     @AppStorage("currencyCode") private var currencyCode: String = "CAD"
     @AppStorage("usdToCadRate") private var usdToCadRate: Double = 1.35
     @AppStorage("usdToCadRateUpdatedAt") private var usdToCadRateUpdatedAt: Double = 0
+    @AppStorage("rapidApiKey") private var rapidApiKey: String = ""
     @State private var showingExportSheet = false
     @State private var showingShareSheet = false
     @State private var exportType: ExportType = .inventory
     @State private var csvData: String = ""
+    @State private var csvFileURL: URL?
     @State private var iCloudStatus: String = "Checking..."
     
     @State private var showingImporter = false
@@ -207,6 +209,39 @@ struct SettingsView: View {
                 }
                 
                 Section {
+                    if rapidApiKey.isEmpty {
+                        SecureField("RapidAPI Key", text: $rapidApiKey)
+                            .font(.manrope(.body))
+                            .listRowBackground(Color.themeRowBackground)
+                    } else {
+                        HStack {
+                            Text("API Key")
+                            Spacer()
+                            Text("Configured")
+                                .foregroundColor(.themeSecondaryText)
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                                .font(.caption)
+                        }
+                        .listRowBackground(Color.themeRowBackground)
+                        
+                        Button("Clear API Key", role: .destructive) {
+                            rapidApiKey = ""
+                        }
+                        .font(.manrope(.body))
+                        .listRowBackground(Color.themeRowBackground)
+                    }
+                    
+                    Text("Used for graded card prices via eBay sold listings. Get a free key at rapidapi.com")
+                        .font(.manrope(.caption, weight: .regular))
+                        .foregroundColor(.themeSecondaryText)
+                        .listRowBackground(Color.themeRowBackground)
+                } header: {
+                    Text("eBay Price Lookup")
+                        .textCase(nil)
+                }
+                
+                Section {
                     if importInProgress {
                         HStack {
                             Spacer()
@@ -272,7 +307,9 @@ struct SettingsView: View {
         .tint(.themeGold)
         .preferredColorScheme(isDarkMode ? .dark : .light)
         .sheet(isPresented: $showingShareSheet) {
-            ShareSheet(activityItems: [csvData])
+            if let url = csvFileURL {
+                ShareSheet(activityItems: [url])
+            }
         }
             .fileImporter(
                 isPresented: $showingImporter,
@@ -353,7 +390,19 @@ struct SettingsView: View {
             csvData = CSVExporter.generateArchiveCSV(cards: archivedCards, sealedProducts: archivedProducts, miscExpenses: miscExpenses, currencyCode: currencyCode)
         }
         
-        showingShareSheet = true
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd_HHmmss"
+        let typeLabel = exportType == .inventory ? "Inventory" : "Archive"
+        let fileName = "PCTracker_\(typeLabel)_\(formatter.string(from: Date())).csv"
+        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        
+        do {
+            try csvData.write(to: tempURL, atomically: true, encoding: .utf8)
+            csvFileURL = tempURL
+            showingShareSheet = true
+        } catch {
+            print("Failed to write CSV file: \(error)")
+        }
     }
     
     private func handleImport(result: Result<[URL], Error>) {
@@ -404,16 +453,7 @@ struct ShareSheet: UIViewControllerRepresentable {
     let activityItems: [Any]
     
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        let fileName = "PCTracker_Export_\(Date.now).csv"
-        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-        
-        if let csvString = activityItems.first as? String {
-            try? csvString.write(to: tempURL, atomically: true, encoding: .utf8)
-            let controller = UIActivityViewController(activityItems: [tempURL], applicationActivities: nil)
-            return controller
-        }
-        
-        return UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
+        UIActivityViewController(activityItems: activityItems, applicationActivities: nil)
     }
     
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}

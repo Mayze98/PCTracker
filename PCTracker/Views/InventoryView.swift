@@ -125,7 +125,8 @@ struct InventoryView: View {
         }
         if usePriceFilter {
             inventoryCards = inventoryCards.filter { card in
-                card.buyPrice >= minPrice && card.buyPrice <= maxPrice
+                let displayPrice = CurrencyFormatter.displayAmount(card.buyPrice, displayCode: currencyCode)
+                return displayPrice >= minPrice && displayPrice <= maxPrice
             }
         }
         
@@ -137,6 +138,7 @@ struct InventoryView: View {
         let filteredCards = inventoryCards.filter { card in
             card.name.localizedCaseInsensitiveContains(searchText) ||
             (card.number?.localizedCaseInsensitiveContains(searchText) ?? false) ||
+            (card.cardSet?.localizedCaseInsensitiveContains(searchText) ?? false) ||
             card.condition.localizedCaseInsensitiveContains(searchText) ||
             (card.graded && "graded".localizedCaseInsensitiveContains(searchText))
         }
@@ -160,7 +162,8 @@ struct InventoryView: View {
         // Apply price filter
         if usePriceFilter {
             inventoryProducts = inventoryProducts.filter { product in
-                product.buyPrice >= minPrice && product.buyPrice <= maxPrice
+                let displayPrice = CurrencyFormatter.displayAmount(product.buyPrice, displayCode: currencyCode)
+                return displayPrice >= minPrice && displayPrice <= maxPrice
             }
         }
         
@@ -550,14 +553,19 @@ struct InventoryView: View {
         Task {
             for (index, card) in cardsToRefresh.enumerated() {
                 do {
-                    let price = try await PokemonTCGService.fetchMarketPrice(
+                    let result = try await PokemonTCGService.fetchMarketPrice(
                         name: card.name,
-                        number: card.number
+                        number: card.number,
+                        cardSet: card.cardSet,
+                        graded: card.graded,
+                        gradeLevel: card.gradeLevel,
+                        condition: card.graded ? nil : card.condition
                     )
                     await MainActor.run {
-                        if let price {
-                            card.marketPrice = price
+                        if let result {
+                            card.marketPrice = result.price
                             card.marketPriceDate = Date()
+                            card.marketPriceSource = result.source
                         }
                         refreshProgress.current = index + 1
                     }

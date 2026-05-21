@@ -20,6 +20,7 @@ struct EditCardView: View {
     @State private var number: String
     @State private var cardSet: String
     @State private var graded: Bool
+    @State private var gradeLevel: Int
     @State private var condition: String
     @State private var buyPrice: String
     @State private var salePrice: String
@@ -31,6 +32,7 @@ struct EditCardView: View {
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var isFetchingPrice = false
     @State private var priceError: String?
+    @State private var ebaySoldItems: [EbaySoldItem] = []
     @State private var showingSearch = false
     @State private var isLoadingImage = false
 
@@ -41,6 +43,7 @@ struct EditCardView: View {
         _number = State(initialValue: card.number ?? "")
         _cardSet = State(initialValue: card.cardSet ?? "")
         _graded = State(initialValue: card.graded)
+        _gradeLevel = State(initialValue: card.gradeLevel ?? 10)
         _condition = State(initialValue: card.condition)
         _buyPrice = State(initialValue: String(format: "%.2f", CurrencyFormatter.displayAmount(card.buyPrice, displayCode: displayCode)))
         _salePrice = State(initialValue: card.salePrice != nil ? String(format: "%.2f", CurrencyFormatter.displayAmount(card.salePrice!, displayCode: displayCode)) : "")
@@ -115,7 +118,14 @@ struct EditCardView: View {
                     Toggle("Graded", isOn: $graded)
                         .listRowBackground(Color.themeRowBackground)
                     
-                    if !graded {
+                    if graded {
+                        Picker("PSA Grade", selection: $gradeLevel) {
+                            ForEach((1...10).reversed(), id: \.self) { grade in
+                                Text("PSA \(grade)").tag(grade)
+                            }
+                        }
+                        .listRowBackground(Color.themeRowBackground)
+                    } else {
                         Picker("Condition", selection: $condition) {
                             ForEach(conditions, id: \.self) { condition in
                                 Text(condition).tag(condition)
@@ -208,6 +218,46 @@ struct EditCardView: View {
                                 Spacer()
                                 Text(date, format: .dateTime.month().day().hour().minute())
                                     .foregroundColor(.themeSecondaryText)
+                            }
+                            .listRowBackground(Color.themeRowBackground)
+                        }
+                        
+                        HStack {
+                            Text("Source")
+                            Spacer()
+                            Text(card.marketPriceSource == "ebay" ? "eBay avg (5 sold)" : "TCGPlayer")
+                                .font(.manrope(.caption, weight: .medium))
+                                .foregroundColor(.themeSecondaryText)
+                        }
+                        .listRowBackground(Color.themeRowBackground)
+                    }
+                    
+                    // eBay last 5 sold items
+                    if !ebaySoldItems.isEmpty {
+                        ForEach(ebaySoldItems) { item in
+                            Button {
+                                if let urlString = item.url, let url = URL(string: urlString) {
+                                    UIApplication.shared.open(url)
+                                }
+                            } label: {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(item.title)
+                                        .font(.manrope(.caption, weight: .medium))
+                                        .foregroundColor(.themePrimaryText)
+                                        .lineLimit(2)
+                                    HStack {
+                                        Text(CurrencyFormatter.convertedString(item.priceCad, code: currencyCode))
+                                            .font(.manrope(.caption, weight: .bold))
+                                            .foregroundColor(.themeGold)
+                                        Spacer()
+                                        Text(item.dateSold)
+                                            .font(.manrope(.caption2, weight: .regular))
+                                            .foregroundColor(.themeSecondaryText)
+                                        Image(systemName: "arrow.up.right.square")
+                                            .font(.caption2)
+                                            .foregroundColor(.themeSecondaryText)
+                                    }
+                                }
                             }
                             .listRowBackground(Color.themeRowBackground)
                         }
@@ -334,16 +384,23 @@ struct EditCardView: View {
     private func fetchMarketPrice() {
         isFetchingPrice = true
         priceError = nil
+        ebaySoldItems = []
         Task {
             do {
-                let price = try await PokemonTCGService.fetchMarketPrice(
+                let result = try await PokemonTCGService.fetchMarketPrice(
                     name: name,
-                    number: number.isEmpty ? nil : number
+                    number: number.isEmpty ? nil : number,
+                    cardSet: cardSet.isEmpty ? nil : cardSet,
+                    graded: graded,
+                    gradeLevel: graded ? gradeLevel : nil,
+                    condition: graded ? nil : condition
                 )
                 await MainActor.run {
-                    if let price {
-                        card.marketPrice = price
+                    if let result {
+                        card.marketPrice = result.price
                         card.marketPriceDate = Date()
+                        card.marketPriceSource = result.source
+                        ebaySoldItems = result.ebaySoldItems
                         try? modelContext.save()
                     } else {
                         priceError = "No market price found for this card"
@@ -366,7 +423,8 @@ struct EditCardView: View {
         card.number = number.isEmpty ? nil : number
         card.cardSet = cardSet.isEmpty ? nil : cardSet
         card.graded = graded
-        card.condition = graded ? "GRADED" : condition
+        card.gradeLevel = graded ? gradeLevel : nil
+        card.condition = graded ? "PSA \(gradeLevel)" : condition
         card.buyPrice = CurrencyFormatter.toStorageAmount(buyPriceValue, fromCode: currencyCode)
         
         // Handle sale price and sale date

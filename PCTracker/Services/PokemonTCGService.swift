@@ -115,6 +115,78 @@ struct CardSearchResult: Identifiable {
     let imageURL: String?
 }
 
+// MARK: - eBay Response Models
+
+struct EbayAvgPriceResponse: Codable {
+    let average_price: Double?
+    let median_price: Double?
+    let response_url: String?
+    let products: [EbayRawSoldProduct]?
+}
+
+struct EbayRawSoldProduct: Codable {
+    let title: String?
+    let sale_price: FlexiblePrice?
+    let date_sold: String?
+    let link: String?
+    let condition: String?  // eBay condition: "New", "New (Other)", "Pre-Owned", etc.
+}
+
+/// A sold eBay listing for display in the UI.
+struct EbaySoldItem: Identifiable {
+    let id = UUID()
+    let title: String
+    let price: Double       // USD (raw from eBay)
+    let priceCad: Double    // Converted to CAD
+    let dateSold: String
+    let url: String?        // Individual listing URL or search results page
+}
+
+/// Handles eBay sale_price that can be either a String ("$125.00") or a number (125.0).
+enum FlexiblePrice: Codable {
+    case string(String)
+    case number(Double)
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let doubleValue = try? container.decode(Double.self) {
+            self = .number(doubleValue)
+        } else if let stringValue = try? container.decode(String.self) {
+            self = .string(stringValue)
+        } else {
+            throw DecodingError.typeMismatch(FlexiblePrice.self, .init(codingPath: decoder.codingPath, debugDescription: "Expected String or Double"))
+        }
+    }
+    
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .string(let s): try container.encode(s)
+        case .number(let d): try container.encode(d)
+        }
+    }
+    
+    /// Returns the numeric value, parsing from string if needed.
+    var doubleValue: Double? {
+        switch self {
+        case .number(let d): return d
+        case .string(let s):
+            let cleaned = s.replacingOccurrences(of: "$", with: "")
+                .replacingOccurrences(of: ",", with: "")
+                .trimmingCharacters(in: .whitespaces)
+            return Double(cleaned)
+        }
+    }
+}
+
+// MARK: - Market Price Result
+
+struct MarketPriceResult {
+    let price: Double           // Already in CAD
+    let source: String          // "tcgplayer" or "ebay"
+    let ebaySoldItems: [EbaySoldItem]   // Last 5 sold items (empty for tcgplayer)
+}
+
 // MARK: - Set Search Result
 
 struct SetSearchResult: Identifiable {
@@ -180,22 +252,46 @@ struct PokemonTCGService {
         let trimmedNumber = number?.trimmingCharacters(in: .whitespaces)
         guard !trimmedName.isEmpty else { return [] }
         
-        if containsJapanese(trimmedName) || (trimmedSet != nil && containsJapanese(trimmedSet!)) {
-            return try await searchTCGdex(name: trimmedName, set: trimmedSet, number: trimmedNumber, language: "ja", limit: limit)
+        let nameIsJapanese = containsJapanese(trimmedName)
+        let setIsJapanese = trimmedSet != nil && containsJapanese(trimmedSet!)
+        
+        if nameIsJapanese {
+            // Japanese card name → search TCGdex Japanese directly
+            let jaResults = try await searchTCGdex(name: trimmedName, set: trimmedSet, number: trimmedNumber, language: "ja", limit: limit)
+            if !jaResults.isEmpty { return jaResults }
+            // Also try TCGdex English in case it's a card with a Japanese name variant
+            return try await searchTCGdex(name: trimmedName, set: trimmedSet, number: trimmedNumber, language: "en", limit: limit)
         } else {
-            // Try pokemontcg.io first (has market prices)
-            let results = try await searchPokemonTCGio(name: trimmedName, set: trimmedSet, number: trimmedNumber, limit: limit)
-            if !results.isEmpty { return results }
+            // English card name — full fallback chain
             
-            // Fall back to TCGdex English
+            // 1. pokemontcg.io (has market prices) — skip if set is Japanese since it won't match
+            if !setIsJapanese {
+                let results = try await searchPokemonTCGio(name: trimmedName, set: trimmedSet, number: trimmedNumber, limit: limit)
+                if !results.isEmpty { return results }
+            }
+            
+            // 2. TCGdex English
             let enResults = try await searchTCGdex(name: trimmedName, set: trimmedSet, number: trimmedNumber, language: "en", limit: limit)
             if !enResults.isEmpty { return enResults }
             
-            // Final fallback: convert romaji to katakana and search TCGdex Japanese
+            // 3. TCGdex Japanese with English name (some JP cards use English names in their data)
+            let jaEnResults = try await searchTCGdex(name: trimmedName, set: trimmedSet, number: trimmedNumber, language: "ja", limit: limit)
+            if !jaEnResults.isEmpty { return jaEnResults }
+            
+            // 4. Convert romaji to katakana and search TCGdex Japanese
             let katakana = romajiToKatakana(trimmedName)
             if katakana != trimmedName {
-                return try await searchTCGdex(name: katakana, set: trimmedSet, number: trimmedNumber, language: "ja", limit: limit)
+                let katakanaResults = try await searchTCGdex(name: katakana, set: trimmedSet, number: trimmedNumber, language: "ja", limit: limit)
+                if !katakanaResults.isEmpty { return katakanaResults }
             }
+            
+            // 5. If set is Japanese, also try pokemontcg.io without the set filter
+            //    (user may be searching for the English version of a card from a JP set)
+            if setIsJapanese {
+                let fallbackResults = try await searchPokemonTCGio(name: trimmedName, set: nil, number: trimmedNumber, limit: limit)
+                if !fallbackResults.isEmpty { return fallbackResults }
+            }
+            
             return []
         }
     }
@@ -292,8 +388,52 @@ struct PokemonTCGService {
         return result
     }
     
+    /// Normalizes search text for the pokemontcg.io API:
+    /// - Replaces curly/smart quotes with straight quotes
+    /// - Expands common ASCII to accented variants used in Pokemon card names (e.g. "Poke" → "Poké")
+    /// - Replaces " & " and " and " with wildcards (API uses literal & in card names which breaks URLs)
+    /// - Replaces space before GX/EX/V/VMAX/VSTAR/BREAK with wildcard (matches both hyphen and space formats)
+    private static func normalizeSearchText(_ text: String) -> String {
+        var result = text
+        // Normalize curly/smart quotes and apostrophes
+        result = result.replacingOccurrences(of: "\u{2018}", with: "'")  // '
+        result = result.replacingOccurrences(of: "\u{2019}", with: "'")  // '
+        result = result.replacingOccurrences(of: "\u{201C}", with: "\"") // "
+        result = result.replacingOccurrences(of: "\u{201D}", with: "\"") // "
+        // Expand "Poke" to "Poké" (case-insensitive replacement preserving original case)
+        if let range = result.range(of: "poke", options: .caseInsensitive) {
+            let original = String(result[range])
+            let isUpperE = original.last?.isUppercase ?? false
+            let replacement = String(original.dropLast()) + (isUpperE ? "É" : "é")
+            result = result.replacingCharacters(in: range, with: replacement)
+        }
+        // Replace " & " and " and " with wildcard (& breaks URL query params)
+        result = result.replacingOccurrences(of: #"\s+&\s+"#, with: "*", options: .regularExpression)
+        result = result.replacingOccurrences(of: #"\s+and\s+"#, with: "*", options: [.regularExpression, .caseInsensitive])
+        // Replace space before GX/EX/V/VMAX/VSTAR/BREAK suffix with wildcard (matches both "Eevee & Snorlax-GX" and "Charizard VMAX")
+        result = result.replacingOccurrences(of: #"\s+(GX|EX|V|VMAX|VSTAR|BREAK)\s*$"#, with: "*$1", options: [.regularExpression, .caseInsensitive])
+        return result
+    }
+    
     /// Searches pokemontcg.io (English cards with market prices).
+    /// Tries the original query first, then a normalized version if no results found.
     private static func searchPokemonTCGio(name: String, set: String?, number: String?, limit: Int) async throws -> [CardSearchResult] {
+        // Try original query first
+        let results = try await searchPokemonTCGioQuery(name: name, set: set, number: number, limit: limit)
+        if !results.isEmpty { return results }
+        
+        // Try normalized query as fallback
+        let normalizedName = normalizeSearchText(name)
+        let normalizedSet = set.map { normalizeSearchText($0) }
+        if normalizedName != name || normalizedSet != set {
+            return try await searchPokemonTCGioQuery(name: normalizedName, set: normalizedSet, number: number, limit: limit)
+        }
+        
+        return []
+    }
+    
+    /// Executes a single pokemontcg.io search query.
+    private static func searchPokemonTCGioQuery(name: String, set: String?, number: String?, limit: Int) async throws -> [CardSearchResult] {
         var queryParts = ["name:\"\(name)*\""]
         if let set, !set.isEmpty {
             queryParts.append("set.name:\"\(set)*\"")
@@ -341,7 +481,9 @@ struct PokemonTCGService {
         guard let encodedName = name.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
             return []
         }
-        var urlString = "https://api.tcgdex.net/v2/\(language)/cards?name=\(encodedName)&pagination:itemsPerPage=\(limit)"
+        // When a set filter is provided, fetch more results since filtering is client-side
+        let fetchLimit = (set != nil && !set!.isEmpty) ? max(limit, 100) : limit
+        var urlString = "https://api.tcgdex.net/v2/\(language)/cards?name=\(encodedName)&pagination:itemsPerPage=\(fetchLimit)"
         if let number, !number.isEmpty,
            let encodedNumber = cleanNumber(number)?.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
             urlString += "&localId=\(encodedNumber)"
@@ -407,21 +549,38 @@ struct PokemonTCGService {
             ))
         }
         
-        // Filter by set name client-side if provided
+        // Filter by set name client-side if provided, then apply limit
         if let set, !set.isEmpty {
             let setLower = set.lowercased()
-            return results.filter { $0.setName.lowercased().contains(setLower) }
+            let filtered = results.filter { $0.setName.lowercased().contains(setLower) }
+            return Array(filtered.prefix(limit))
         }
         
-        return results
+        return Array(results.prefix(limit))
     }
     
     /// Searches for Pokemon TCG sets by name. Returns up to `limit` results.
+    /// Tries the original query first, then a normalized version if no results found.
     static func searchSets(query: String, limit: Int = 20) async throws -> [SetSearchResult] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return [] }
         
-        let queryString = "name:\"\(trimmed)*\""
+        // Try original query first
+        let results = try await searchSetsQuery(name: trimmed, limit: limit)
+        if !results.isEmpty { return results }
+        
+        // Try normalized query as fallback
+        let normalized = normalizeSearchText(trimmed)
+        if normalized != trimmed {
+            return try await searchSetsQuery(name: normalized, limit: limit)
+        }
+        
+        return []
+    }
+    
+    /// Executes a single set search query against pokemontcg.io.
+    private static func searchSetsQuery(name: String, limit: Int) async throws -> [SetSearchResult] {
+        let queryString = "name:\"\(name)*\""
         guard let encoded = queryString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
               let url = URL(string: "https://api.pokemontcg.io/v2/sets?q=\(encoded)&pageSize=\(limit)&orderBy=-releaseDate") else {
             return []
@@ -445,18 +604,361 @@ struct PokemonTCGService {
         }
     }
     
-    /// Fetches the TCGPlayer market price for a card by name and optional number.
-    static func fetchMarketPrice(name: String, number: String?) async throws -> Double? {
-        guard let card = try await findCard(name: name, number: number) else { return nil }
+    /// Fetches the market price for a card.
+    /// For graded cards with a RapidAPI key, fetches eBay sold prices.
+    /// Otherwise falls back to TCGPlayer via pokemontcg.io.
+    /// Strips PSA grade suffix from a card name for clean API lookups.
+    /// e.g. "Mewtwo VSTAR PSA 10" → "Mewtwo VSTAR"
+    private static func stripGradeFromName(_ name: String) -> String {
+        // Remove trailing "PSA X" or "PSA XX" (case-insensitive)
+        let trimmed = name.replacingOccurrences(of: #"\s+PSA\s+\d{1,2}\s*$"#, with: "", options: [.regularExpression, .caseInsensitive])
+        return trimmed.trimmingCharacters(in: .whitespaces)
+    }
+    
+    static func fetchMarketPrice(name: String, number: String?, cardSet: String? = nil, graded: Bool = false, gradeLevel: Int? = nil, condition: String? = nil) async throws -> MarketPriceResult? {
+        // Strip PSA grade from name if present (condition text gets appended to name on save)
+        let cleanName = graded ? stripGradeFromName(name) : name
         
-        guard let price = card.tcgplayer?.prices?.bestPrice else { return nil }
-        return try await adjustedPrice(price)
+        let apiKey = UserDefaults.standard.string(forKey: "rapidApiKey") ?? ""
+        let hasApiKey = !apiKey.isEmpty
+        
+        // Try eBay for graded cards when API key is available
+        if graded, let grade = gradeLevel, hasApiKey {
+            print("[PriceService] Attempting eBay lookup for '\(cleanName)' PSA \(grade)")
+            do {
+                if let result = try await fetchEbayGradedPrice(name: cleanName, number: number, cardSet: cardSet, gradeLevel: grade, apiKey: apiKey) {
+                    print("[PriceService] eBay price found: \(result.price) CAD, \(result.soldItems.count) sold items")
+                    return MarketPriceResult(price: result.price, source: "ebay", ebaySoldItems: result.soldItems)
+                } else {
+                    print("[PriceService] eBay returned no results, falling back to TCGPlayer")
+                }
+            } catch {
+                print("[PriceService] eBay lookup failed: \(error), falling back to TCGPlayer")
+            }
+        }
+        
+        // Try eBay for non-graded cards with condition filtering when API key is available
+        if !graded, hasApiKey, let cond = condition, !cond.isEmpty {
+            print("[PriceService] Attempting eBay condition lookup for '\(cleanName)' condition: \(cond)")
+            do {
+                if let result = try await fetchEbayConditionPrice(name: cleanName, number: number, cardSet: cardSet, condition: cond, apiKey: apiKey) {
+                    print("[PriceService] eBay condition price found: \(result.price) CAD, \(result.soldItems.count) sold items")
+                    return MarketPriceResult(price: result.price, source: "ebay", ebaySoldItems: result.soldItems)
+                } else {
+                    print("[PriceService] eBay condition returned no results, falling back to TCGPlayer")
+                }
+            } catch {
+                print("[PriceService] eBay condition lookup failed: \(error), falling back to TCGPlayer")
+            }
+        }
+        
+        if !hasApiKey {
+            print("[PriceService] No RapidAPI key configured, using TCGPlayer")
+        }
+        
+        // Fall back to TCGPlayer
+        guard let card = try await findCard(name: cleanName, number: number) else {
+            print("[PriceService] TCGPlayer: no card found for '\(cleanName)' number: \(number ?? "nil")")
+            return nil
+        }
+        guard let price = card.tcgplayer?.prices?.bestPrice else {
+            print("[PriceService] TCGPlayer: card found but no price data")
+            return nil
+        }
+        let cadPrice = try await adjustedPrice(price)
+        return MarketPriceResult(price: cadPrice, source: "tcgplayer", ebaySoldItems: [])
+    }
+    
+    /// Fetches average sold price from eBay for a PSA-graded card via RapidAPI.
+    /// Returns the price (in CAD) and last 5 sold items, or nil if no data available.
+    private static func fetchEbayGradedPrice(name: String, number: String?, cardSet: String?, gradeLevel: Int, apiKey: String) async throws -> (price: Double, soldItems: [EbaySoldItem])? {
+        guard let url = URL(string: "https://ebay-average-selling-price.p.rapidapi.com/findCompletedItems") else {
+            return nil
+        }
+        
+        // Build keywords: "{name} {number} {set} PSA {grade}"
+        var keywordParts = [name]
+        if let number, !number.isEmpty {
+            keywordParts.append(number)
+        }
+        if let cardSet, !cardSet.isEmpty {
+            keywordParts.append(cardSet)
+        }
+        keywordParts.append("PSA \(gradeLevel)")
+        let keywords = keywordParts.joined(separator: " ")
+        
+        print("[eBay] Search keywords: \(keywords)")
+        
+        let body: [String: Any] = [
+            "keywords": keywords,
+            "max_search_results": "60",
+            "category_id": "183454",
+            "remove_outliers": true
+        ]
+        
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: body) else {
+            return nil
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        request.setValue("ebay-average-selling-price.p.rapidapi.com", forHTTPHeaderField: "x-rapidapi-host")
+        request.setValue(apiKey, forHTTPHeaderField: "x-rapidapi-key")
+        request.httpBody = jsonData
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            print("[eBay] No HTTP response")
+            return nil
+        }
+        print("[eBay] HTTP status: \(http.statusCode)")
+        if http.statusCode != 200 {
+            if let body = String(data: data, encoding: .utf8) {
+                print("[eBay] Error body: \(body.prefix(500))")
+            }
+            return nil
+        }
+        
+        let decoded = try JSONDecoder().decode(EbayAvgPriceResponse.self, from: data)
+        let searchURL = decoded.response_url
+        
+        guard let products = decoded.products, !products.isEmpty else {
+            print("[eBay] No products in response")
+            return nil
+        }
+        
+        // Filter products: must match exact PSA grade and card number in the title.
+        // Grade filter: "PSA 8" must not match "PSA 8.5", "PSA 80", or "PSA 10"
+        // Also reject titles containing a DIFFERENT PSA grade (e.g. title has both "PSA 9" and "PSA 10")
+        let gradePattern = "\\bPSA\\s*\(gradeLevel)\\b(?!\\.)"
+        let gradeRegex = try? NSRegularExpression(pattern: gradePattern, options: .caseInsensitive)
+        
+        // Regex to find ANY PSA grade in a title
+        let anyGradeRegex = try? NSRegularExpression(pattern: "\\bPSA\\s*(\\d+)\\b(?!\\.)", options: .caseInsensitive)
+        
+        // Clean the card number for matching (strip set denominator, leading zeros)
+        let cleanedNum = number.flatMap { cleanNumber($0) }
+        
+        let matchedProducts = products.filter { product in
+            guard let title = product.title else { return false }
+            let range = NSRange(title.startIndex..., in: title)
+            
+            // Must contain our exact PSA grade
+            guard gradeRegex?.firstMatch(in: title, range: range) != nil else { return false }
+            
+            // Reject if title also contains a DIFFERENT PSA grade
+            if let anyRegex = anyGradeRegex {
+                let allMatches = anyRegex.matches(in: title, range: range)
+                for match in allMatches {
+                    if let numRange = Range(match.range(at: 1), in: title),
+                       let foundGrade = Int(title[numRange]),
+                       foundGrade != gradeLevel {
+                        return false  // Title mentions a different PSA grade
+                    }
+                }
+            }
+            
+            // Must contain the card number if we have one
+            if let num = cleanedNum, !num.isEmpty {
+                let titleUpper = title.uppercased()
+                let numUpper = num.uppercased()
+                // Match the number with common eBay title formats
+                let numPatterns = ["#\(numUpper)", "/\(numUpper)", " \(numUpper) ", " \(numUpper)/", " \(numUpper),", " \(numUpper)-"]
+                let hasNumber = numPatterns.contains { titleUpper.contains($0) }
+                    || titleUpper.hasSuffix(" \(numUpper)")
+                if !hasNumber { return false }
+            }
+            return true
+        }
+        
+        print("[eBay] \(products.count) total, \(matchedProducts.count) match PSA \(gradeLevel) + number \(cleanedNum ?? "n/a")")
+        for item in matchedProducts.suffix(5) {
+            print("[eBay]   -> \(item.title ?? "?"): \(item.sale_price?.doubleValue ?? 0)")
+        }
+        
+        guard !matchedProducts.isEmpty else {
+            print("[eBay] No products matched filters, skipping unfiltered average")
+            return nil
+        }
+        
+        // Take last 5 matched products
+        let last5 = Array(matchedProducts.suffix(5))
+        let rate = try await getUsdToCadRate()
+        
+        let soldItems: [EbaySoldItem] = last5.compactMap { product in
+            guard let usdPrice = product.sale_price?.doubleValue else { return nil }
+            return EbaySoldItem(
+                title: product.title ?? "Unknown",
+                price: usdPrice,
+                priceCad: usdPrice * rate,
+                dateSold: product.date_sold ?? "",
+                url: product.link ?? searchURL
+            )
+        }
+        
+        // Average the prices of the sold items
+        let prices = soldItems.map(\.priceCad)
+        guard !prices.isEmpty else { return nil }
+        let average = prices.reduce(0, +) / Double(prices.count)
+        
+        return (price: average, soldItems: soldItems)
+    }
+    
+    /// Maps a TCG card condition to acceptable eBay condition strings for filtering.
+    /// Returns nil for DMG or unknown conditions (no filtering).
+    private static func ebayConditionsForCardCondition(_ condition: String) -> [String]? {
+        switch condition.uppercased() {
+        case "NM":
+            return ["new", "new (other)", "like new", "near mint", "nm"]
+        case "LP":
+            return ["very good", "light played", "lightly played", "lp"]
+        case "MP":
+            return ["good", "moderately played", "mp"]
+        case "HP":
+            return ["acceptable", "heavily played", "hp"]
+        case "DMG":
+            return nil
+        default:
+            return nil
+        }
+    }
+    
+    /// Fetches average sold price from eBay for a raw (non-graded) card filtered by condition.
+    /// Returns the price (in CAD) and last 5 sold items, or nil if no data available.
+    private static func fetchEbayConditionPrice(name: String, number: String?, cardSet: String?, condition: String, apiKey: String) async throws -> (price: Double, soldItems: [EbaySoldItem])? {
+        guard let url = URL(string: "https://ebay-average-selling-price.p.rapidapi.com/findCompletedItems") else {
+            return nil
+        }
+        
+        // Build keywords: "{name} {number} {set}" (no PSA grade for raw cards)
+        var keywordParts = [name]
+        if let number, !number.isEmpty {
+            keywordParts.append(number)
+        }
+        if let cardSet, !cardSet.isEmpty {
+            keywordParts.append(cardSet)
+        }
+        let keywords = keywordParts.joined(separator: " ")
+        
+        print("[eBay-Condition] Search keywords: \(keywords), condition: \(condition)")
+        
+        let body: [String: Any] = [
+            "keywords": keywords,
+            "max_search_results": "60",
+            "category_id": "183454",
+            "remove_outliers": true
+        ]
+        
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: body) else {
+            return nil
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        request.setValue("ebay-average-selling-price.p.rapidapi.com", forHTTPHeaderField: "x-rapidapi-host")
+        request.setValue(apiKey, forHTTPHeaderField: "x-rapidapi-key")
+        request.httpBody = jsonData
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse else {
+            print("[eBay-Condition] No HTTP response")
+            return nil
+        }
+        print("[eBay-Condition] HTTP status: \(http.statusCode)")
+        if http.statusCode != 200 {
+            if let body = String(data: data, encoding: .utf8) {
+                print("[eBay-Condition] Error body: \(body.prefix(500))")
+            }
+            return nil
+        }
+        
+        let decoded = try JSONDecoder().decode(EbayAvgPriceResponse.self, from: data)
+        let searchURL = decoded.response_url
+        
+        guard let products = decoded.products, !products.isEmpty else {
+            print("[eBay-Condition] No products in response")
+            return nil
+        }
+        
+        // Get allowed eBay conditions for this card condition
+        let allowedConditions = ebayConditionsForCardCondition(condition)
+        
+        // Clean the card number for matching
+        let cleanedNum = number.flatMap { cleanNumber($0) }
+        
+        // Regex to detect PSA-graded listings (exclude them from raw card results)
+        let psaRegex = try? NSRegularExpression(pattern: "\\bPSA\\s*\\d+\\b", options: .caseInsensitive)
+        
+        let matchedProducts = products.filter { product in
+            guard let title = product.title else { return false }
+            let range = NSRange(title.startIndex..., in: title)
+            
+            // Reject PSA-graded listings — we only want raw cards
+            if psaRegex?.firstMatch(in: title, range: range) != nil {
+                return false
+            }
+            
+            // Filter by condition if we have allowed conditions
+            if let allowed = allowedConditions {
+                guard let ebayCondition = product.condition?.lowercased() else { return false }
+                if !allowed.contains(where: { ebayCondition.contains($0) }) {
+                    return false
+                }
+            }
+            
+            // Must contain the card number if we have one
+            if let num = cleanedNum, !num.isEmpty {
+                let titleUpper = title.uppercased()
+                let numUpper = num.uppercased()
+                let numPatterns = ["#\(numUpper)", "/\(numUpper)", " \(numUpper) ", " \(numUpper)/", " \(numUpper),", " \(numUpper)-"]
+                let hasNumber = numPatterns.contains { titleUpper.contains($0) }
+                    || titleUpper.hasSuffix(" \(numUpper)")
+                if !hasNumber { return false }
+            }
+            return true
+        }
+        
+        print("[eBay-Condition] \(products.count) total, \(matchedProducts.count) match condition '\(condition)' + number \(cleanedNum ?? "n/a")")
+        for item in matchedProducts.suffix(5) {
+            print("[eBay-Condition]   -> \(item.title ?? "?"): \(item.sale_price?.doubleValue ?? 0) [\(item.condition ?? "?")]")
+        }
+        
+        guard !matchedProducts.isEmpty else {
+            print("[eBay-Condition] No products matched filters")
+            return nil
+        }
+        
+        // Take last 5 matched products
+        let last5 = Array(matchedProducts.suffix(5))
+        let rate = try await getUsdToCadRate()
+        
+        let soldItems: [EbaySoldItem] = last5.compactMap { product in
+            guard let usdPrice = product.sale_price?.doubleValue else { return nil }
+            return EbaySoldItem(
+                title: product.title ?? "Unknown",
+                price: usdPrice,
+                priceCad: usdPrice * rate,
+                dateSold: product.date_sold ?? "",
+                url: product.link ?? searchURL
+            )
+        }
+        
+        // Average the prices of the sold items
+        let prices = soldItems.map(\.priceCad)
+        guard !prices.isEmpty else { return nil }
+        let average = prices.reduce(0, +) / Double(prices.count)
+        
+        return (price: average, soldItems: soldItems)
     }
     
     /// Multi-step search strategy to find the best matching card.
     private static func findCard(name: String, number: String?) async throws -> PokemonTCGCard? {
         let cleanedNumber = cleanNumber(number)
         let cleanedName = cleanName(name)
+        let normalizedName = normalizeSearchText(name)
+        let normalizedCleanedName = cleanName(normalizedName)
         
         var strategies: [[String]] = []
         
@@ -466,9 +968,20 @@ struct PokemonTCGService {
         if let num = cleanedNumber, cleanedName != name {
             strategies.append(["name:\"\(cleanedName)\"", "number:\(num)"])
         }
+        // Try normalized name with number
+        if let num = cleanedNumber, normalizedName != name {
+            strategies.append(["name:\"\(normalizedName)\"", "number:\(num)"])
+        }
         strategies.append(["name:\"\(name)\""])
         if cleanedName != name {
             strategies.append(["name:\"\(cleanedName)\""])
+        }
+        // Try normalized names without number
+        if normalizedName != name {
+            strategies.append(["name:\"\(normalizedName)\""])
+        }
+        if normalizedCleanedName != cleanedName && normalizedCleanedName != normalizedName {
+            strategies.append(["name:\"\(normalizedCleanedName)\""])
         }
         
         for queryParts in strategies {

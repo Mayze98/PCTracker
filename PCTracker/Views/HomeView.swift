@@ -235,14 +235,6 @@ struct HomeView: View {
         return "0.00%"
     }
     
-    private var totalMarketValue: Double {
-        inventoryCards.compactMap { $0.marketPrice }.reduce(0, +)
-    }
-    
-    private var cardsWithMarketPrice: Int {
-        inventoryCards.filter { $0.marketPrice != nil }.count
-    }
-    
     private var totalSoldCount: Int {
         soldCards.count + soldSealedProducts.count
     }
@@ -351,28 +343,6 @@ struct HomeView: View {
                 }
                 .padding(.horizontal)
                 
-                // MARK: - Market Stats
-                if cardsWithMarketPrice > 0 {
-                    HStack(spacing: 8) {
-                        CompactStatCard(
-                            icon: "chart.line.uptrend.xyaxis",
-                            title: "Market Value",
-                            value: CurrencyFormatter.convertedString(totalMarketValue, code: currencyCode, minFraction: 0, maxFraction: 0),
-                            monthChange: "\(cardsWithMarketPrice)/\(inventoryCards.count) priced"
-                        )
-                        CompactStatCard(
-                            icon: "arrow.up.arrow.down",
-                            title: "Unrealized P/L",
-                            value: {
-                                let unrealized = totalMarketValue - totalCards
-                                return CurrencyFormatter.convertedSignedString(unrealized, code: currencyCode, minFraction: 0, maxFraction: 0)
-                            }(),
-                            monthChange: totalCards > 0 ?
-                                String(format: "%.1f%%", ((totalMarketValue - totalCards) / totalCards) * 100) : "--"
-                        )
-                    }
-                    .padding(.horizontal)
-                }
                 
                 // MARK: - Realized Profit Chart
                 VStack(alignment: .leading, spacing: 12) {

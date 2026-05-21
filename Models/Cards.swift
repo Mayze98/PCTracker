@@ -15,6 +15,7 @@ class Cards {
     var number: String?
     var cardSet: String?
     var graded: Bool
+    var gradeLevel: Int?  // PSA grade 1-10 (nil if not graded)
     var condition: String  // Store condition as simple String
     var buyPrice: Double
     var salePrice: Double?
@@ -23,12 +24,14 @@ class Cards {
     @Attribute(.externalStorage) var photoData: Data?
     var marketPrice: Double?
     var marketPriceDate: Date?
+    var marketPriceSource: String?  // "tcgplayer" or "ebay" — nil means tcgplayer (legacy)
     
-    init(name: String, number: String? = nil, cardSet: String? = nil, graded: Bool = false, condition: String = "NM", buyPrice: Double, salePrice: Double? = nil, saleDate: Date? = nil, purchaseDate: Date = Date(), photoData: Data? = nil, marketPrice: Double? = nil, marketPriceDate: Date? = nil) {
+    init(name: String, number: String? = nil, cardSet: String? = nil, graded: Bool = false, gradeLevel: Int? = nil, condition: String = "NM", buyPrice: Double, salePrice: Double? = nil, saleDate: Date? = nil, purchaseDate: Date = Date(), photoData: Data? = nil, marketPrice: Double? = nil, marketPriceDate: Date? = nil, marketPriceSource: String? = nil) {
         self.name = name
         self.number = number
         self.cardSet = cardSet
         self.graded = graded
+        self.gradeLevel = gradeLevel
         self.condition = condition
         self.buyPrice = buyPrice
         self.salePrice = salePrice
@@ -37,6 +40,7 @@ class Cards {
         self.photoData = photoData
         self.marketPrice = marketPrice
         self.marketPriceDate = marketPriceDate
+        self.marketPriceSource = marketPriceSource
     }
     
     // Unrealized profit/loss based on market price vs buy price

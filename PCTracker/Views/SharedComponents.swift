@@ -37,7 +37,7 @@ struct InventoryCardRow: View {
                         .font(.manrope(.headline, weight: .semiBold))
                     Spacer()
                     if card.graded {
-                        Text("GRADED")
+                        Text(card.gradeLevel != nil ? "PSA \(card.gradeLevel!)" : "GRADED")
                             .font(.manrope(.caption2, weight: .bold))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -109,6 +109,16 @@ struct InventoryCardRow: View {
                             Text(CurrencyFormatter.convertedSignedString(marketProfit, code: currencyCode))
                                 .font(.manrope(.caption, weight: .medium))
                                 .foregroundColor(marketProfit >= 0 ? .themeGold : .themeLoss)
+                        }
+                        
+                        if card.marketPriceSource == "ebay" {
+                            Text("eBay")
+                                .font(.manrope(.caption2, weight: .bold))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(Color.themeGold.opacity(0.2))
+                                .foregroundColor(.themeGold)
+                                .cornerRadius(3)
                         }
                     }
                 }

@@ -347,21 +347,13 @@ public struct CSVImporter {
             throw CSVImportError.dateParseFailed(purchaseDateString)
         }
         
-        let graded: Bool
-        let condition: String
-        
-        if conditionText.uppercased() == "GRADED" {
-            graded = true
-            condition = ""
-        } else {
-            graded = false
-            condition = conditionText.isEmpty ? "NM" : conditionText
-        }
+        let (graded, gradeLevel, condition) = parseConditionField(conditionText)
         
         let card = Cards(
             name: name,
             number: number,
             graded: graded,
+            gradeLevel: gradeLevel,
             condition: condition,
             buyPrice: buyPrice,
             purchaseDate: purchaseDate
@@ -427,21 +419,13 @@ public struct CSVImporter {
             throw CSVImportError.dateParseFailed(purchaseDateString)
         }
         
-        let graded: Bool
-        let condition: String
-        
-        if conditionText.uppercased() == "GRADED" {
-            graded = true
-            condition = ""
-        } else {
-            graded = false
-            condition = conditionText.isEmpty ? "NM" : conditionText
-        }
+        let (graded, gradeLevel, condition) = parseConditionField(conditionText)
         
         let card = Cards(
             name: name,
             number: number,
             graded: graded,
+            gradeLevel: gradeLevel,
             condition: condition,
             buyPrice: buyPrice,
             salePrice: salePrice,
@@ -518,21 +502,14 @@ public struct CSVImporter {
             throw CSVImportError.dateParseFailed(purchaseDateString)
         }
         
-        let graded: Bool
-        let condition: String
-        if conditionText.uppercased() == "GRADED" {
-            graded = true
-            condition = ""
-        } else {
-            graded = false
-            condition = conditionText.isEmpty ? "NM" : conditionText
-        }
+        let (graded, gradeLevel, condition) = parseConditionField(conditionText)
         
         let card = Cards(
             name: name,
             number: number,
             cardSet: cardSet,
             graded: graded,
+            gradeLevel: gradeLevel,
             condition: condition,
             buyPrice: toStorage(buyPrice, fromCode: currency),
             purchaseDate: purchaseDate,
@@ -608,21 +585,14 @@ public struct CSVImporter {
             saleDate = parseDate(saleDateString)
         }
         
-        let graded: Bool
-        let condition: String
-        if conditionText.uppercased() == "GRADED" {
-            graded = true
-            condition = ""
-        } else {
-            graded = false
-            condition = conditionText.isEmpty ? "NM" : conditionText
-        }
+        let (graded, gradeLevel, condition) = parseConditionField(conditionText)
         
         let card = Cards(
             name: name,
             number: number,
             cardSet: cardSet,
             graded: graded,
+            gradeLevel: gradeLevel,
             condition: condition,
             buyPrice: toStorage(buyPrice, fromCode: currency),
             salePrice: salePrice,
@@ -704,6 +674,24 @@ public struct CSVImporter {
             notes: notes?.isEmpty == false ? notes : nil
         )
         context.insert(expense)
+    }
+    
+    /// Parses a condition field from CSV and returns graded status, grade level, and condition string.
+    ///
+    /// Recognizes:
+    /// - "PSA 10", "PSA 9", etc. → graded=true, gradeLevel=10/9/etc., condition="PSA 10"
+    /// - "GRADED" → graded=true, gradeLevel=nil, condition="GRADED"
+    /// - Anything else → graded=false, gradeLevel=nil, condition as-is (or "NM" if empty)
+    private static func parseConditionField(_ text: String) -> (graded: Bool, gradeLevel: Int?, condition: String) {
+        let upper = text.uppercased().trimmingCharacters(in: .whitespaces)
+        
+        if upper.hasPrefix("PSA "), let level = Int(upper.dropFirst(4).trimmingCharacters(in: .whitespaces)), (1...10).contains(level) {
+            return (true, level, "PSA \(level)")
+        } else if upper == "GRADED" {
+            return (true, nil, "GRADED")
+        } else {
+            return (false, nil, text.isEmpty ? "NM" : text)
+        }
     }
     
     /// Attempts to parse a Double value from a string using the current locale.

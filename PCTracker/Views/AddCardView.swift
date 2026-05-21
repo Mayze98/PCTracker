@@ -7,6 +7,7 @@
 import SwiftUI
 import SwiftData
 import PhotosUI
+import Vision
 
 // MARK: - Add Card View
 struct AddCardView: View {
@@ -17,6 +18,7 @@ struct AddCardView: View {
     @State private var showingAddCard = false
     @State private var showingAddProduct = false
     @State private var showingAddMisc = false
+    @State private var showingScanCard = false
 
     
     var body: some View {
@@ -75,6 +77,45 @@ struct AddCardView: View {
                                 ),
                                 lineWidth: 1
                             )
+                    )
+                }
+                .buttonStyle(.plain)
+                .padding(.bottom, 12)
+                
+                // Scan Card button
+                Button(action: {
+                    showingScanCard = true
+                }) {
+                    HStack(spacing: 16) {
+                        Image(systemName: "camera.viewfinder")
+                            .font(.system(size: 26, weight: .medium))
+                            .foregroundColor(.themeGold)
+                            .frame(width: 56, height: 56)
+                            .background(Color.themeGold.opacity(0.12))
+                            .cornerRadius(14)
+                        
+                        VStack(alignment: .leading, spacing: 5) {
+                            Text("Scan Card")
+                                .font(.manrope(20, weight: .semiBold))
+                                .foregroundColor(.themePrimaryText)
+                            Text("Snap a photo to identify")
+                                .font(.manrope(14, weight: .regular))
+                                .foregroundColor(.themeSecondaryText.opacity(0.7))
+                                .lineLimit(1)
+                        }
+                        
+                        Spacer()
+                        
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.themeSecondaryText.opacity(0.4))
+                    }
+                    .padding(20)
+                    .background(Color.themeCardBackground.opacity(0.7))
+                    .cornerRadius(16)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.themeGold.opacity(0.12), lineWidth: 1)
                     )
                 }
                 .buttonStyle(.plain)
@@ -172,13 +213,38 @@ struct AddCardView: View {
                     showingAddMisc = false
                 })
             }
+            .sheet(isPresented: $showingScanCard) {
+                ScanCardView(modelContext: modelContext, onSave: {
+                    showingScanCard = false
+                })
+            }
             .onChange(of: selectedTab) { _, _ in
                 showingAddCard = false
                 showingAddProduct = false
                 showingAddMisc = false
+                showingScanCard = false
             }
         }
     }
+}
+
+// MARK: - Queued Card Model
+struct QueuedCard: Identifiable {
+    let id = UUID()
+    var name: String
+    var number: String?
+    var cardSet: String?
+    var graded: Bool
+    var gradeLevel: Int?
+    var condition: String
+    var buyPrice: Double        // In display currency
+    var salePrice: Double?      // In display currency
+    var hasSalePrice: Bool
+    var saleDate: Date?
+    var marketPrice: Double?    // In CAD (from search)
+    var purchaseDate: Date
+    var photoData: Data?
+    var imageURL: String?       // For display in queue
 }
 
 // MARK: - Add Card Form View
@@ -186,12 +252,15 @@ struct AddCardFormView: View {
     @Environment(\.dismiss) private var dismiss
     let modelContext: ModelContext
     var onSave: () -> Void
+    var initialResult: CardSearchResult? = nil
+    var initialPhotoData: Data? = nil
     @AppStorage("currencyCode") private var currencyCode: String = "CAD"
     
     @State private var name: String = ""
     @State private var number: String = ""
     @State private var cardSet: String = ""
     @State private var graded: Bool = false
+    @State private var gradeLevel: Int = 10
     @State private var condition: String = "NM"
     @State private var buyPrice: String = ""
     @State private var salePrice: String = ""
@@ -210,6 +279,25 @@ struct AddCardFormView: View {
     @State private var showingSearch = false
     @State private var marketPrice: Double?
     @State private var isLoadingImage = false
+    
+    // Queue & percentage pricing state
+    @State private var cardQueue: [QueuedCard] = []
+    @State private var selectedPercentage: Int? = nil
+    @State private var customPercentage: String = ""
+    @State private var showingDiscardAlert = false
+    @State private var referenceBuyPrice: Double? = nil  // base price for percentage calc when no market price
+    
+    private let percentagePresets = [60, 70, 80, 90]
+    
+    /// Whether the current form has enough data to be queued/saved
+    private var currentFormIsValid: Bool {
+        !name.trimmingCharacters(in: .whitespaces).isEmpty && !buyPrice.isEmpty && Double(buyPrice) != nil
+    }
+    
+    /// Total cards that will be saved (queue + current form if valid)
+    private var totalSaveCount: Int {
+        cardQueue.count + (currentFormIsValid ? 1 : 0)
+    }
     
     var body: some View {
         NavigationStack {
@@ -275,7 +363,14 @@ struct AddCardFormView: View {
                     Toggle("Graded", isOn: $graded)
                         .listRowBackground(Color.themeRowBackground)
                     
-                    if !graded {
+                    if graded {
+                        Picker("PSA Grade", selection: $gradeLevel) {
+                            ForEach((1...10).reversed(), id: \.self) { grade in
+                                Text("PSA \(grade)").tag(grade)
+                            }
+                        }
+                        .listRowBackground(Color.themeRowBackground)
+                    } else {
                         Picker("Condition", selection: $condition) {
                             ForEach(conditions, id: \.self) { cond in
                                 Text(cond).tag(cond)
@@ -300,7 +395,21 @@ struct AddCardFormView: View {
                         .foregroundColor(.themeSecondaryText)
                 }
                 
+                // MARK: Pricing Section
                 Section {
+                    // Market price reference (when available from search)
+                    if let mp = marketPrice {
+                        HStack {
+                            Text("Market Price")
+                                .foregroundColor(.themeSecondaryText)
+                            Spacer()
+                            Text(CurrencyFormatter.convertedString(mp, code: currencyCode))
+                                .foregroundColor(.themeGold)
+                                .font(.manrope(16, weight: .bold))
+                        }
+                        .listRowBackground(Color.themeRowBackground)
+                    }
+                    
                     HStack {
                         Text("Buy Price")
                         Spacer()
@@ -310,6 +419,70 @@ struct AddCardFormView: View {
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .frame(maxWidth: 100)
+                    }
+                    .listRowBackground(Color.themeRowBackground)
+                    
+                    // Percentage pills — always visible
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Buy at percentage")
+                            .font(.manrope(13, weight: .medium))
+                            .foregroundColor(.themeSecondaryText)
+                        
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(percentagePresets, id: \.self) { pct in
+                                    Button {
+                                        applyPercentage(pct)
+                                    } label: {
+                                        Text("\(pct)%")
+                                            .font(.manrope(14, weight: .semiBold))
+                                            .padding(.horizontal, 14)
+                                            .padding(.vertical, 8)
+                                            .background(selectedPercentage == pct ? Color.themeGold : Color.themeGold.opacity(0.12))
+                                            .foregroundColor(selectedPercentage == pct ? .black : .themeGold)
+                                            .cornerRadius(20)
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                                
+                                // Custom percentage
+                                Button {
+                                    selectedPercentage = -1 // sentinel for custom
+                                } label: {
+                                    if selectedPercentage == -1 {
+                                        HStack(spacing: 4) {
+                                            TextField("", text: $customPercentage)
+                                                .keyboardType(.numberPad)
+                                                .frame(width: 36)
+                                                .multilineTextAlignment(.center)
+                                                .font(.manrope(14, weight: .semiBold))
+                                                .foregroundColor(.black)
+                                                .onChange(of: customPercentage) { _, newVal in
+                                                    if let pctVal = Double(newVal) {
+                                                        applyCustomPercentage(pctVal)
+                                                    }
+                                                }
+                                            Text("%")
+                                                .font(.manrope(14, weight: .semiBold))
+                                                .foregroundColor(.black)
+                                        }
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 8)
+                                        .background(Color.themeGold)
+                                        .cornerRadius(20)
+                                    } else {
+                                        Text("Custom")
+                                            .font(.manrope(14, weight: .semiBold))
+                                            .padding(.horizontal, 14)
+                                            .padding(.vertical, 8)
+                                            .background(Color.themeGold.opacity(0.12))
+                                            .foregroundColor(.themeGold)
+                                            .cornerRadius(20)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
                     }
                     .listRowBackground(Color.themeRowBackground)
                     
@@ -340,6 +513,74 @@ struct AddCardFormView: View {
                 }
                 
                 PhotoPickerSection(photoData: $photoData, onLibraryRequested: { showingLibraryPicker = true }, onCameraRequested: { showingCamera = true })
+                
+                // MARK: Add to Queue Button
+                Section {
+                    Button {
+                        addToQueue()
+                    } label: {
+                        HStack {
+                            Image(systemName: "plus.circle.fill")
+                            Text("Add to Queue")
+                        }
+                        .frame(maxWidth: .infinity)
+                        .font(.manrope(16, weight: .semiBold))
+                        .foregroundColor(currentFormIsValid ? .themeGold : .themeSecondaryText.opacity(0.4))
+                    }
+                    .disabled(!currentFormIsValid)
+                    .listRowBackground(Color.themeGold.opacity(currentFormIsValid ? 0.12 : 0.05))
+                }
+                
+                // MARK: Queue Display
+                if !cardQueue.isEmpty {
+                    Section {
+                        ForEach(cardQueue) { card in
+                            HStack(spacing: 12) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    HStack(spacing: 6) {
+                                        Text(card.name)
+                                            .font(.manrope(15, weight: .semiBold))
+                                            .foregroundColor(.themePrimaryText)
+                                            .lineLimit(1)
+                                        if let num = card.number {
+                                            Text("#\(num)")
+                                                .font(.manrope(13, weight: .medium))
+                                                .foregroundColor(.themeSecondaryText)
+                                        }
+                                    }
+                                    HStack(spacing: 4) {
+                                        if let set = card.cardSet, !set.isEmpty {
+                                            Text(set)
+                                                .font(.manrope(13, weight: .regular))
+                                                .foregroundColor(.themeSecondaryText)
+                                            Text("·")
+                                                .foregroundColor(.themeSecondaryText.opacity(0.5))
+                                        }
+                                        Text(CurrencyFormatter.string(card.buyPrice, code: currencyCode))
+                                            .font(.manrope(13, weight: .semiBold))
+                                            .foregroundColor(.themeGold)
+                                    }
+                                }
+                                
+                                Spacer()
+                                
+                                Button {
+                                    cardQueue.removeAll { $0.id == card.id }
+                                } label: {
+                                    Image(systemName: "xmark.circle.fill")
+                                        .foregroundColor(.themeSecondaryText.opacity(0.5))
+                                        .font(.system(size: 20))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .listRowBackground(Color.themeRowBackground)
+                        }
+                    } header: {
+                        Text("Queue (\(cardQueue.count) \(cardQueue.count == 1 ? "card" : "cards"))")
+                            .textCase(nil)
+                            .foregroundColor(.themeSecondaryText)
+                    }
+                }
             }
             .foregroundColor(.themePrimaryText)
             .scrollContentBackground(.hidden)
@@ -350,21 +591,32 @@ struct AddCardFormView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
-                        dismiss()
+                        if cardQueue.isEmpty {
+                            dismiss()
+                        } else {
+                            showingDiscardAlert = true
+                        }
                     }
                 }
                 
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        saveCard()
+                    Button(cardQueue.isEmpty ? "Save" : "Save All (\(totalSaveCount))") {
+                        saveAll()
                     }
                     .fontWeight(.semibold)
+                    .disabled(cardQueue.isEmpty && !currentFormIsValid)
                 }
             }
             .alert("Error", isPresented: $showingAlert) {
                 Button("OK", role: .cancel) { }
             } message: {
                 Text(alertMessage)
+            }
+            .alert("Discard Queue?", isPresented: $showingDiscardAlert) {
+                Button("Discard", role: .destructive) { dismiss() }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("You have \(cardQueue.count) card\(cardQueue.count == 1 ? "" : "s") in the queue that haven't been saved.")
             }
             .fullScreenCover(isPresented: $showingCamera) {
                 CameraView { data in photoData = data }
@@ -389,6 +641,14 @@ struct AddCardFormView: View {
                     await MainActor.run { selectedPhotoItem = nil }
                 }
             }
+            .onAppear {
+                if let result = initialResult {
+                    applySearchResult(result)
+                }
+                if let data = initialPhotoData, photoData == nil {
+                    photoData = data
+                }
+            }
         }
     }
     
@@ -398,6 +658,8 @@ struct AddCardFormView: View {
         number = result.number
         cardSet = result.setName
         marketPrice = result.marketPrice
+        selectedPercentage = nil
+        customPercentage = ""
         
         // Download card image from API
         if let urlString = result.imageURL, let url = URL(string: urlString) {
@@ -417,64 +679,151 @@ struct AddCardFormView: View {
         }
     }
     
-    //MARK: Save the card
-    private func saveCard() {
-        // Validate required fields
+    // MARK: - Percentage Helpers
+    
+    /// Returns the base price for percentage calculations.
+    /// Uses market price (converted to display currency) if available, otherwise the current buy price.
+    private func percentageBasePrice() -> Double? {
+        if let mp = marketPrice {
+            return CurrencyFormatter.displayAmount(mp, displayCode: currencyCode)
+        }
+        // No market price — use the current buy price as the base (capture it before modifying)
+        if let ref = referenceBuyPrice {
+            return ref
+        }
+        if let current = Double(buyPrice), current > 0 {
+            return current
+        }
+        return nil
+    }
+    
+    private func applyPercentage(_ pct: Int) {
+        // Capture the current buy price as reference before first percentage tap (no market price case)
+        if marketPrice == nil && referenceBuyPrice == nil {
+            if let current = Double(buyPrice), current > 0 {
+                referenceBuyPrice = current
+            }
+        }
+        
+        selectedPercentage = pct
+        customPercentage = ""
+        
+        if let base = percentageBasePrice() {
+            buyPrice = String(format: "%.2f", base * Double(pct) / 100.0)
+        }
+    }
+    
+    private func applyCustomPercentage(_ pctVal: Double) {
+        // Capture the current buy price as reference before first percentage tap (no market price case)
+        if marketPrice == nil && referenceBuyPrice == nil {
+            if let current = Double(buyPrice), current > 0 {
+                referenceBuyPrice = current
+            }
+        }
+        
+        if let base = percentageBasePrice() {
+            buyPrice = String(format: "%.2f", base * pctVal / 100.0)
+        }
+    }
+    
+    // MARK: - Add to Queue
+    private func addToQueue() {
         guard !name.trimmingCharacters(in: .whitespaces).isEmpty else {
             alertMessage = "Please enter a card name"
             showingAlert = true
             return
         }
         
-        // Validate buy price
         guard let buyPriceValue = Double(buyPrice) else {
             alertMessage = "Please enter a valid buy price"
             showingAlert = true
             return
         }
         
-        // Validate sale price if provided
         var salePriceValue: Double? = nil
         if hasSalePrice && !salePrice.isEmpty {
-            guard let parsedSalePrice = Double(salePrice) else {
+            guard let parsed = Double(salePrice) else {
                 alertMessage = "Please enter a valid sale price"
                 showingAlert = true
                 return
             }
-            salePriceValue = parsedSalePrice
+            salePriceValue = parsed
         }
         
-        // Prepare card number (optional)
-        let cardNumber = number.trimmingCharacters(in: .whitespaces).isEmpty ? nil : number.trimmingCharacters(in: .whitespaces)
-        let cardSetValue = cardSet.trimmingCharacters(in: .whitespaces).isEmpty ? nil : cardSet.trimmingCharacters(in: .whitespaces)
-        
-        // Convert prices to storage currency (CAD) if user is entering in USD
-        let storedBuyPrice = CurrencyFormatter.toStorageAmount(buyPriceValue, fromCode: currencyCode)
-        let storedSalePrice = salePriceValue.map { CurrencyFormatter.toStorageAmount($0, fromCode: currencyCode) }
-        
-        // Create the new card
-        let newCard = Cards(
+        let queued = QueuedCard(
             name: name.trimmingCharacters(in: .whitespaces),
-            number: cardNumber,
-            cardSet: cardSetValue,
+            number: number.trimmingCharacters(in: .whitespaces).isEmpty ? nil : number.trimmingCharacters(in: .whitespaces),
+            cardSet: cardSet.trimmingCharacters(in: .whitespaces).isEmpty ? nil : cardSet.trimmingCharacters(in: .whitespaces),
             graded: graded,
-            condition: condition,
-            buyPrice: storedBuyPrice,
-            salePrice: storedSalePrice,
-            saleDate: (hasSalePrice && storedSalePrice != nil) ? saleDate : nil,
-            purchaseDate: purchaseDate,
-            photoData: photoData,
+            gradeLevel: graded ? gradeLevel : nil,
+            condition: graded ? "PSA \(gradeLevel)" : condition,
+            buyPrice: buyPriceValue,
+            salePrice: salePriceValue,
+            hasSalePrice: hasSalePrice,
+            saleDate: (hasSalePrice && salePriceValue != nil) ? saleDate : nil,
             marketPrice: marketPrice,
-            marketPriceDate: marketPrice != nil ? Date() : nil
+            purchaseDate: purchaseDate,
+            photoData: photoData
         )
         
-        // Insert into SwiftData
-        modelContext.insert(newCard)
+        cardQueue.append(queued)
+        resetFormForNextCard()
+    }
+    
+    // MARK: - Reset Form (keeps shared fields)
+    private func resetFormForNextCard() {
+        name = ""
+        number = ""
+        cardSet = ""
+        buyPrice = ""
+        salePrice = ""
+        hasSalePrice = false
+        photoData = nil
+        marketPrice = nil
+        selectedPercentage = nil
+        customPercentage = ""
+        referenceBuyPrice = nil
+        isLoadingImage = false
+        // Keep: purchaseDate, graded, gradeLevel, condition, saleDate
+    }
+    
+    // MARK: - Save All
+    private func saveAll() {
+        // If current form has valid data, add it to queue first
+        if currentFormIsValid {
+            addToQueue()
+        }
         
-        // Explicitly save the context
+        guard !cardQueue.isEmpty else {
+            alertMessage = "No cards to save"
+            showingAlert = true
+            return
+        }
+        
+        for card in cardQueue {
+            let storedBuyPrice = CurrencyFormatter.toStorageAmount(card.buyPrice, fromCode: currencyCode)
+            let storedSalePrice = card.salePrice.map { CurrencyFormatter.toStorageAmount($0, fromCode: currencyCode) }
+            
+            let newCard = Cards(
+                name: card.name,
+                number: card.number,
+                cardSet: card.cardSet,
+                graded: card.graded,
+                gradeLevel: card.gradeLevel,
+                condition: card.condition,
+                buyPrice: storedBuyPrice,
+                salePrice: storedSalePrice,
+                saleDate: card.saleDate,
+                purchaseDate: card.purchaseDate,
+                photoData: card.photoData,
+                marketPrice: card.marketPrice,
+                marketPriceDate: card.marketPrice != nil ? Date() : nil
+            )
+            
+            modelContext.insert(newCard)
+        }
+        
         try? modelContext.save()
-        
-        // Dismiss and call completion
         dismiss()
         onSave()
     }
@@ -1407,6 +1756,519 @@ struct SearchResultRow: View {
                 Image(systemName: "lanyardcard")
                     .foregroundColor(.themeSecondaryText.opacity(0.5))
             )
+    }
+}
+
+// MARK: - Scan Card View
+
+struct ScanCardView: View {
+    @Environment(\.dismiss) private var dismiss
+    let modelContext: ModelContext
+    var onSave: () -> Void
+    @AppStorage("currencyCode") private var currencyCode: String = "CAD"
+    
+    @State private var capturedPhoto: Data?
+    @State private var showingCamera = true
+    @State private var recognizedName: String = ""
+    @State private var recognizedNumber: String = ""
+    @State private var searchResults: [CardSearchResult] = []
+    @State private var isProcessing = false
+    @State private var hasSearched = false
+    @State private var showingAddForm = false
+    @State private var showingManualSearch = false
+    @State private var selectedResult: CardSearchResult?
+    @State private var debugOCRText: String = ""  // Temporary debug
+    
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.themeBackground.ignoresSafeArea()
+                
+                if capturedPhoto == nil && !showingCamera {
+                    // Camera was cancelled
+                    VStack(spacing: 16) {
+                        Image(systemName: "camera.viewfinder")
+                            .font(.system(size: 48))
+                            .foregroundColor(.themeSecondaryText.opacity(0.3))
+                        Text("No photo taken")
+                            .font(.manrope(16, weight: .medium))
+                            .foregroundColor(.themeSecondaryText)
+                        Button("Try Again") {
+                            showingCamera = true
+                        }
+                        .font(.manrope(16, weight: .semiBold))
+                        .foregroundColor(.themeGold)
+                    }
+                } else if isProcessing {
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .tint(.themeGold)
+                            .scaleEffect(1.5)
+                        Text("Scanning card...")
+                            .font(.manrope(16, weight: .medium))
+                            .foregroundColor(.themeSecondaryText)
+                        Text("Reading text and searching")
+                            .font(.manrope(13, weight: .regular))
+                            .foregroundColor(.themeSecondaryText.opacity(0.6))
+                    }
+                } else if capturedPhoto != nil {
+                    // Show results
+                    scanResultsContent
+                }
+            }
+            .navigationTitle("Scan Card")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+            .fullScreenCover(isPresented: $showingCamera) {
+                CameraView { data in
+                    capturedPhoto = data
+                    processImage(data)
+                }
+                .ignoresSafeArea()
+            }
+            .onChange(of: showingCamera) { _, isShowing in
+                // If camera was dismissed without a photo, leave capturedPhoto nil
+            }
+            .sheet(isPresented: $showingAddForm) {
+                if let result = selectedResult {
+                    AddCardFormView(
+                        modelContext: modelContext,
+                        onSave: {
+                            showingAddForm = false
+                            dismiss()
+                            onSave()
+                        },
+                        initialResult: result,
+                        initialPhotoData: capturedPhoto
+                    )
+                } else {
+                    // Enter manually — blank form with just the photo
+                    AddCardFormView(
+                        modelContext: modelContext,
+                        onSave: {
+                            showingAddForm = false
+                            dismiss()
+                            onSave()
+                        },
+                        initialPhotoData: capturedPhoto
+                    )
+                }
+            }
+            .sheet(isPresented: $showingManualSearch) {
+                CardSearchView { result in
+                    selectedResult = result
+                    showingManualSearch = false
+                    showingAddForm = true
+                }
+            }
+        }
+    }
+    
+    // MARK: - Scan Results Content
+    
+    private var scanResultsContent: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                // Captured photo preview
+                if let data = capturedPhoto, let uiImage = UIImage(data: data) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxHeight: 180)
+                        .cornerRadius(12)
+                        .padding(.horizontal)
+                }
+                
+                // Recognized text — editable
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Recognized name")
+                        .font(.manrope(13, weight: .medium))
+                        .foregroundColor(.themeSecondaryText)
+                    
+                    HStack(spacing: 8) {
+                        TextField("Card name...", text: $recognizedName)
+                            .font(.manrope(16, weight: .medium))
+                            .padding(12)
+                            .background(Color.themeRowBackground)
+                            .cornerRadius(10)
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                        
+                        Button {
+                            performSearch()
+                        } label: {
+                            Image(systemName: "magnifyingglass")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.black)
+                                .padding(12)
+                                .background(Color.themeGold)
+                                .cornerRadius(10)
+                        }
+                        .disabled(recognizedName.trimmingCharacters(in: .whitespaces).count < 2)
+                    }
+                    
+                    if !recognizedNumber.isEmpty {
+                        HStack(spacing: 4) {
+                            Text("Card #:")
+                                .font(.manrope(12, weight: .medium))
+                                .foregroundColor(.themeSecondaryText)
+                            Text(recognizedNumber)
+                                .font(.manrope(12, weight: .semiBold))
+                                .foregroundColor(.themeGold)
+                        }
+                    }
+                }
+                .padding(.horizontal)
+                
+                // Debug OCR output
+                if !debugOCRText.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("OCR Debug (score | text)")
+                            .font(.manrope(11, weight: .bold))
+                            .foregroundColor(.themeGold)
+                        Text(debugOCRText)
+                            .font(.system(size: 9, design: .monospaced))
+                            .foregroundColor(.themeSecondaryText)
+                    }
+                    .padding(8)
+                    .background(Color.themeRowBackground)
+                    .cornerRadius(8)
+                    .padding(.horizontal)
+                }
+                
+                // Results list
+                if !searchResults.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Matches")
+                            .font(.manrope(13, weight: .medium))
+                            .foregroundColor(.themeSecondaryText)
+                            .padding(.horizontal)
+                        
+                        VStack(spacing: 0) {
+                            ForEach(searchResults) { result in
+                                Button {
+                                    selectedResult = result
+                                    showingAddForm = true
+                                } label: {
+                                    SearchResultRow(result: result)
+                                        .padding(.horizontal, 16)
+                                        .padding(.vertical, 10)
+                                }
+                                .buttonStyle(.plain)
+                                
+                                if result.id != searchResults.last?.id {
+                                    Divider()
+                                        .background(Color.themeSecondaryText.opacity(0.15))
+                                        .padding(.horizontal, 16)
+                                }
+                            }
+                        }
+                        .background(Color.themeRowBackground)
+                        .cornerRadius(12)
+                        .padding(.horizontal)
+                    }
+                } else if hasSearched {
+                    VStack(spacing: 8) {
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 32))
+                            .foregroundColor(.themeSecondaryText.opacity(0.3))
+                        Text("No matches found")
+                            .font(.manrope(16, weight: .medium))
+                            .foregroundColor(.themeSecondaryText)
+                        Text("Try editing the name above and re-searching")
+                            .font(.manrope(13, weight: .regular))
+                            .foregroundColor(.themeSecondaryText.opacity(0.6))
+                    }
+                    .padding(.vertical, 20)
+                }
+                
+                // Fallback options
+                VStack(spacing: 10) {
+                    if hasSearched {
+                        Text("Can't find it?")
+                            .font(.manrope(13, weight: .medium))
+                            .foregroundColor(.themeSecondaryText)
+                    }
+                    
+                    HStack(spacing: 12) {
+                        Button {
+                            showingManualSearch = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "magnifyingglass")
+                                Text("Search Manually")
+                            }
+                            .font(.manrope(14, weight: .semiBold))
+                            .foregroundColor(.themeGold)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Color.themeGold.opacity(0.12))
+                            .cornerRadius(10)
+                        }
+                        
+                        Button {
+                            selectedResult = nil
+                            showingAddForm = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "square.and.pencil")
+                                Text("Enter Manually")
+                            }
+                            .font(.manrope(14, weight: .semiBold))
+                            .foregroundColor(.themeSecondaryText)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(Color.themeRowBackground)
+                            .cornerRadius(10)
+                        }
+                    }
+                }
+                .padding(.top, 8)
+                .padding(.horizontal)
+            }
+            .padding(.vertical, 16)
+        }
+    }
+    
+    // MARK: - Process Captured Image
+    
+    private func processImage(_ imageData: Data) {
+        isProcessing = true
+        Task {
+            let texts = await recognizeText(from: imageData)
+            
+            // Build debug info showing all OCR results with positions and sizes
+            let maxH = texts.map { $0.boundingBox.height }.max() ?? 1.0
+            let maxY = texts.map { $0.boundingBox.midY }.max() ?? 1.0
+            let heightThreshold = maxH * 0.25
+            let debugLines = texts
+                .sorted { $0.boundingBox.midY > $1.boundingBox.midY }
+                .map { item in
+                    let sizeScore = maxH > 0 ? item.boundingBox.height / maxH : 0
+                    let posScore = maxY > 0 ? item.boundingBox.midY / maxY : 0
+                    let total = (sizeScore * 0.7) + (posScore * 0.3)
+                    let tooSmall = item.boundingBox.height < heightThreshold ? " [TINY]" : ""
+                    return String(format: "%.2f (s%.2f p%.2f) H%.3f%@ | %@",
+                                  total, sizeScore, posScore,
+                                  item.boundingBox.height, tooSmall,
+                                  item.text)
+                }
+            
+            let (name, number) = extractCardInfo(from: texts)
+            
+            await MainActor.run {
+                recognizedName = name
+                recognizedNumber = number ?? ""
+                debugOCRText = debugLines.joined(separator: "\n")
+            }
+            
+            // Auto-search if we got a name
+            if !name.isEmpty {
+                await searchForCard(name: name, number: number)
+            }
+            
+            await MainActor.run {
+                isProcessing = false
+                hasSearched = true
+            }
+        }
+    }
+    
+    private func performSearch() {
+        let name = recognizedName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return }
+        
+        isProcessing = true
+        hasSearched = false
+        Task {
+            let numberFilter = recognizedNumber.trimmingCharacters(in: .whitespaces).isEmpty ? nil : recognizedNumber.trimmingCharacters(in: .whitespaces)
+            await searchForCard(name: name, number: numberFilter)
+            await MainActor.run {
+                isProcessing = false
+                hasSearched = true
+            }
+        }
+    }
+    
+    private func searchForCard(name: String, number: String?) async {
+        do {
+            let results = try await PokemonTCGService.searchCards(
+                name: name,
+                set: nil,
+                number: number
+            )
+            await MainActor.run {
+                searchResults = results
+            }
+        } catch {
+            await MainActor.run {
+                searchResults = []
+            }
+        }
+    }
+    
+    // MARK: - OCR Text Recognition
+    
+    /// Recognized text with its bounding box position in Vision coordinates (0,0 = bottom-left)
+    private struct RecognizedTextItem {
+        let text: String
+        let boundingBox: CGRect  // Vision coordinates: origin bottom-left, Y increases upward
+    }
+    
+    private func recognizeText(from imageData: Data) async -> [RecognizedTextItem] {
+        guard let image = UIImage(data: imageData),
+              let cgImage = image.cgImage else { return [] }
+        
+        return await withCheckedContinuation { continuation in
+            let request = VNRecognizeTextRequest { request, error in
+                guard let observations = request.results as? [VNRecognizedTextObservation] else {
+                    continuation.resume(returning: [])
+                    return
+                }
+                let items = observations.compactMap { obs -> RecognizedTextItem? in
+                    guard let candidate = obs.topCandidates(1).first else { return nil }
+                    return RecognizedTextItem(text: candidate.string, boundingBox: obs.boundingBox)
+                }
+                continuation.resume(returning: items)
+            }
+            request.recognitionLevel = .accurate
+            request.recognitionLanguages = ["en", "ja"]
+            
+            let handler = VNImageRequestHandler(cgImage: cgImage)
+            try? handler.perform([request])
+        }
+    }
+    
+    // MARK: - Card Info Extraction
+    
+    private func extractCardInfo(from items: [RecognizedTextItem]) -> (name: String, number: String?) {
+        var name = ""
+        var number: String? = nil
+        
+        // --- Card number: look for "41/146" pattern, prefer lower items ---
+        let sortedByYAsc = items.sorted { $0.boundingBox.midY < $1.boundingBox.midY }
+        for item in sortedByYAsc {
+            if let match = item.text.range(of: #"\d{1,3}\s*/\s*\d{1,3}"#, options: .regularExpression) {
+                number = String(item.text[match]).replacingOccurrences(of: " ", with: "")
+                break
+            }
+        }
+        
+        // --- Card name extraction ---
+        // Strategy: The card name is BOTH one of the largest text elements AND near the top.
+        // We combine font size (bounding box height) and position to find it.
+        // This handles: variable card framing, illustrator names (small text),
+        // and ability/attack names (lower position).
+        
+        let nameSkipPatterns = [
+            #"(?i)\d+\s*HP"#,          // Contains "250 HP" or "HP 130"
+            #"(?i)HP\s*\d+"#,
+            #"(?i)^BASIC$"#,
+            #"(?i)STAGE\s*\d"#,        // "Stage 1", "STAGE2", "STAGE 2"
+            #"^\d+\s*/\s*\d+"#,        // Card number "41/146"
+            #"(?i)Illus"#,             // Illustrator (anywhere in text)
+            #"(?i)Weakness"#,
+            #"(?i)Resistance"#,
+            #"(?i)Retreat"#,
+            #"(?i)^Pokémon"#,
+            #"(?i)^Pokemon"#,
+            #"^\d+$"#,
+            #"^©"#,
+            #"(?i)^TRAINER$"#,
+            #"(?i)^SUPPORTER$"#,
+            #"(?i)^ITEM$"#,
+            #"(?i)^ENERGY$"#,
+            #"^V$"#,
+            #"(?i)^ex$"#,
+            #"(?i)^VMAX$"#,
+            #"(?i)^VSTAR$"#,
+            #"^\w$"#,                  // Single character
+            #"(?i)^Evolves\s"#,
+            #"(?i)^NO\.\s*\d"#,
+            #"(?i)^Ability"#,
+            #"(?i)^Once\s"#,
+            #"(?i)^This\s"#,
+            #"(?i)^If\s"#,
+            #"(?i)^You\s"#,
+            #"(?i)^Your\s"#,
+            #"(?i)^When\s"#,
+            #"(?i)^During\s"#,
+            #"(?i)^Put\s"#,
+            #"(?i)^Attach"#,
+            #"(?i)^Search"#,
+            #"(?i)^Discard"#,
+            #"(?i)^Draw\s"#,
+            #"(?i)^Flip\s"#,
+            #"(?i)^Choose"#,
+            #"(?i)^Heal\s"#,
+            #"(?i)^Switch"#,
+            #"(?i)^Shuffle"#,
+            #"(?i)^Look\s"#,
+            #"(?i)\d+\s*damage"#,
+            #"(?i)\d+\s*lbs"#,
+            #"(?i)^HT:"#,
+            #"(?i)^WT:"#,
+            #"(?i)^It\s"#,
+            #"(?i)^The\s"#,
+            #"(?i)^A\s"#,
+            #"(?i)^An\s"#,
+            #"(?i)rule"#,
+            #"(?i)^x\d"#,             // "x2" multiplier
+            #"^\d+\s*$"#,             // Just numbers
+            #"(?i)^compressed"#,
+            #"(?i)Graphics$"#,        // "5ban Graphics" etc.
+        ]
+        
+        // Find the tallest text element to establish a baseline for filtering
+        let globalMaxH = items.map { $0.boundingBox.height }.max() ?? 1.0
+        
+        // Filter to valid candidates
+        var candidates: [(text: String, item: RecognizedTextItem)] = []
+        for item in items {
+            let trimmed = item.text.trimmingCharacters(in: .whitespaces)
+            if trimmed.count < 2 { continue }
+            
+            // Skip tiny text — anything less than 25% of the tallest text height
+            // is fine print (illustrator names, copyright, set info, etc.)
+            if globalMaxH > 0 && item.boundingBox.height < globalMaxH * 0.25 { continue }
+            
+            // Skip long sentences (more than 4 words are descriptions, not names)
+            let wordCount = trimmed.components(separatedBy: .whitespaces).filter { !$0.isEmpty }.count
+            if wordCount > 4 { continue }
+            
+            let shouldSkip = nameSkipPatterns.contains { pattern in
+                trimmed.range(of: pattern, options: .regularExpression) != nil
+            }
+            if shouldSkip { continue }
+            
+            candidates.append((text: trimmed, item: item))
+        }
+        
+        // Score: the card name is the LARGEST text that's also near the TOP.
+        // Use bounding box height as primary signal (the name is always in the biggest font)
+        // with position as tiebreaker.
+        if !candidates.isEmpty {
+            let maxH = candidates.map { $0.item.boundingBox.height }.max() ?? 1.0
+            let maxY = candidates.map { $0.item.boundingBox.midY }.max() ?? 1.0
+            
+            let scored = candidates.map { c -> (text: String, score: Double) in
+                let sizeNorm = maxH > 0 ? c.item.boundingBox.height / maxH : 0
+                let posNorm = maxY > 0 ? c.item.boundingBox.midY / maxY : 0
+                // Size is the dominant factor — the card name is always the biggest text
+                let score = (sizeNorm * 0.7) + (posNorm * 0.3)
+                return (text: c.text, score: score)
+            }
+            
+            if let best = scored.max(by: { $0.score < $1.score }) {
+                name = best.text
+            }
+        }
+        
+        return (name, number)
     }
 }
 

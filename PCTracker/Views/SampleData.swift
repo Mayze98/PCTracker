@@ -38,8 +38,16 @@ let previewContainer: ModelContainer = {
     ]
 
     for c in cards {
+        // Parse PSA grade level from condition text if graded
+        var gradeLevel: Int? = nil
+        if c.2 { // graded
+            let upper = c.3.uppercased()
+            if upper.hasPrefix("PSA "), let level = Int(upper.dropFirst(4).trimmingCharacters(in: .whitespaces)) {
+                gradeLevel = level
+            }
+        }
         context.insert(Cards(
-            name: c.0, number: c.1, graded: c.2, condition: c.3,
+            name: c.0, number: c.1, graded: c.2, gradeLevel: gradeLevel, condition: c.3,
             buyPrice: c.4, salePrice: c.5, saleDate: c.6, purchaseDate: c.7,
             marketPrice: c.8, marketPriceDate: c.9
         ))
