@@ -37,7 +37,7 @@ struct InventoryCardRow: View {
                         .font(.manrope(.headline, weight: .semiBold))
                     Spacer()
                     if card.graded {
-                        Text(card.gradeLevel != nil ? "PSA \(card.gradeLevel!)" : "GRADED")
+                        Text(card.gradeLevel.map { "PSA \($0)" } ?? "GRADED")
                             .font(.manrope(.caption2, weight: .bold))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)

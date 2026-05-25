@@ -39,6 +39,8 @@ struct InventoryView: View {
     // Sort states
     @State private var sortOption: SortOption = .date
     @State private var sortAscending: Bool = false
+    @State private var showingSaveError = false
+    @State private var saveErrorMessage = ""
     
     enum SortOption: String, CaseIterable, Identifiable {
         case buyPrice = "Buy Price"
@@ -540,6 +542,11 @@ struct InventoryView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
             }
+            .alert("Save Error", isPresented: $showingSaveError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(saveErrorMessage)
+            }
         }
     }
     
@@ -576,7 +583,12 @@ struct InventoryView: View {
                 }
             }
             await MainActor.run {
-                try? modelContext.save()
+                do {
+                    try modelContext.save()
+                } catch {
+                    saveErrorMessage = "Failed to save updated prices: \(error.localizedDescription)"
+                    showingSaveError = true
+                }
                 isRefreshingPrices = false
             }
         }

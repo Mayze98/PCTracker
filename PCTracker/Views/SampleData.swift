@@ -15,7 +15,9 @@ import SwiftUI
 let previewContainer: ModelContainer = {
     let schema = Schema([Cards.self, SealedProduct.self, MiscExpense.self])
     let config = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: schema, configurations: [config])
+    guard let container = try? ModelContainer(for: schema, configurations: [config]) else {
+        fatalError("Preview ModelContainer failed to initialize")
+    }
     let context = container.mainContext
 
     // MARK: - Sample Cards
@@ -92,5 +94,5 @@ let previewContainer: ModelContainer = {
 
 /// Helper to build a Date without verbosity.
 private func date(_ year: Int, _ month: Int, _ day: Int) -> Date {
-    Calendar.current.date(from: DateComponents(year: year, month: month, day: day))!
+    Calendar.current.date(from: DateComponents(year: year, month: month, day: day)) ?? Date()
 }

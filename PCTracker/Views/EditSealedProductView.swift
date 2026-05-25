@@ -35,7 +35,7 @@ struct EditSealedProductView: View {
         _name = State(initialValue: product.name)
         _expansion = State(initialValue: product.expansion ?? "")
         _buyPrice = State(initialValue: String(format: "%.2f", CurrencyFormatter.displayAmount(product.buyPrice, displayCode: displayCode)))
-        _salePrice = State(initialValue: product.salePrice != nil ? String(format: "%.2f", CurrencyFormatter.displayAmount(product.salePrice!, displayCode: displayCode)) : "")
+        _salePrice = State(initialValue: product.salePrice.map { String(format: "%.2f", CurrencyFormatter.displayAmount($0, displayCode: displayCode)) } ?? "")
         _saleDate = State(initialValue: product.saleDate ?? Date())
         _purchaseDate = State(initialValue: product.purchaseDate)
         _photoData = State(initialValue: product.photoData)
@@ -243,7 +243,9 @@ struct EditSealedProductView: View {
         do {
             try modelContext.save()
         } catch {
+            #if DEBUG
             print("Error saving product: \(error)")
+            #endif
         }
         
         dismiss()
@@ -252,7 +254,9 @@ struct EditSealedProductView: View {
 
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: SealedProduct.self, configurations: config)
+    guard let container = try? ModelContainer(for: SealedProduct.self, configurations: config) else {
+        fatalError("Preview ModelContainer failed to initialize")
+    }
     
     let sampleProduct = SealedProduct(name: "Booster Box", expansion: "Base Set", buyPrice: 500.00)
     container.mainContext.insert(sampleProduct)

@@ -242,6 +242,7 @@ struct QueuedCard: Identifiable {
     var hasSalePrice: Bool
     var saleDate: Date?
     var marketPrice: Double?    // In CAD (from search)
+    var marketPriceSource: String?  // "tcgplayer" or "ebay"
     var purchaseDate: Date
     var photoData: Data?
     var imageURL: String?       // For display in queue
@@ -278,7 +279,9 @@ struct AddCardFormView: View {
     @State private var alertMessage = ""
     @State private var showingSearch = false
     @State private var marketPrice: Double?
+    @State private var marketPriceSource: String?
     @State private var isLoadingImage = false
+    @State private var isLoadingMarketPrice = false
     
     // Queue & percentage pricing state
     @State private var cardQueue: [QueuedCard] = []
@@ -398,10 +401,31 @@ struct AddCardFormView: View {
                 // MARK: Pricing Section
                 Section {
                     // Market price reference (when available from search)
-                    if let mp = marketPrice {
+                    if isLoadingMarketPrice {
                         HStack {
                             Text("Market Price")
                                 .foregroundColor(.themeSecondaryText)
+                            Spacer()
+                            ProgressView()
+                                .tint(.themeGold)
+                            Text("Fetching...")
+                                .foregroundColor(.themeSecondaryText)
+                                .font(.manrope(14, weight: .medium))
+                        }
+                        .listRowBackground(Color.themeRowBackground)
+                    } else if let mp = marketPrice {
+                        HStack {
+                            Text("Market Price")
+                                .foregroundColor(.themeSecondaryText)
+                            if marketPriceSource == "ebay" {
+                                Text("eBay")
+                                    .font(.manrope(11, weight: .semiBold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.blue)
+                                    .cornerRadius(4)
+                            }
                             Spacer()
                             Text(CurrencyFormatter.convertedString(mp, code: currencyCode))
                                 .foregroundColor(.themeGold)
@@ -641,6 +665,18 @@ struct AddCardFormView: View {
                     await MainActor.run { selectedPhotoItem = nil }
                 }
             }
+            .onChange(of: graded) { _, isGraded in
+                if isGraded && !name.trimmingCharacters(in: .whitespaces).isEmpty {
+                    fetchEbayMarketPrice()
+                } else if !isGraded {
+                    // Switched back to raw — revert to TCGPlayer price if we had one from search
+                    // Clear eBay-sourced market price; the TCGPlayer price was already set by applySearchResult
+                    if marketPriceSource == "ebay" {
+                        marketPrice = nil
+                        marketPriceSource = nil
+                    }
+                }
+            }
             .onAppear {
                 if let result = initialResult {
                     applySearchResult(result)
@@ -658,6 +694,7 @@ struct AddCardFormView: View {
         number = result.number
         cardSet = result.setName
         marketPrice = result.marketPrice
+        marketPriceSource = result.marketPrice != nil ? "tcgplayer" : nil
         selectedPercentage = nil
         customPercentage = ""
         
@@ -674,6 +711,60 @@ struct AddCardFormView: View {
                     await MainActor.run {
                         isLoadingImage = false
                     }
+                }
+            }
+        }
+        
+        // If graded, fetch eBay price to replace TCGPlayer price
+        if graded {
+            fetchEbayMarketPrice()
+        }
+    }
+    
+    // MARK: - Fetch eBay Market Price for Graded Cards
+    private func fetchEbayMarketPrice() {
+        let cardName = name.trimmingCharacters(in: .whitespaces)
+        guard !cardName.isEmpty else { return }
+        
+        let cardNumber = number.trimmingCharacters(in: .whitespaces).isEmpty ? nil : number.trimmingCharacters(in: .whitespaces)
+        let cardSetName = cardSet.trimmingCharacters(in: .whitespaces).isEmpty ? nil : cardSet.trimmingCharacters(in: .whitespaces)
+        let currentGradeLevel = gradeLevel
+        
+        // Store the TCGPlayer price as fallback
+        let tcgPlayerPrice = marketPriceSource != "ebay" ? marketPrice : nil
+        
+        isLoadingMarketPrice = true
+        Task {
+            do {
+                let result = try await PokemonTCGService.fetchMarketPrice(
+                    name: cardName,
+                    number: cardNumber,
+                    cardSet: cardSetName,
+                    graded: true,
+                    gradeLevel: currentGradeLevel
+                )
+                await MainActor.run {
+                    if let result {
+                        marketPrice = result.price
+                        marketPriceSource = result.source
+                    } else if let fallback = tcgPlayerPrice {
+                        // eBay returned nothing, keep TCGPlayer price
+                        marketPrice = fallback
+                        marketPriceSource = "tcgplayer"
+                    }
+                    isLoadingMarketPrice = false
+                    // Reset percentage selection since base price changed
+                    selectedPercentage = nil
+                    customPercentage = ""
+                }
+            } catch {
+                await MainActor.run {
+                    // On error, keep TCGPlayer price if we had one
+                    if let fallback = tcgPlayerPrice {
+                        marketPrice = fallback
+                        marketPriceSource = "tcgplayer"
+                    }
+                    isLoadingMarketPrice = false
                 }
             }
         }
@@ -762,6 +853,7 @@ struct AddCardFormView: View {
             hasSalePrice: hasSalePrice,
             saleDate: (hasSalePrice && salePriceValue != nil) ? saleDate : nil,
             marketPrice: marketPrice,
+            marketPriceSource: marketPriceSource,
             purchaseDate: purchaseDate,
             photoData: photoData
         )
@@ -780,10 +872,12 @@ struct AddCardFormView: View {
         hasSalePrice = false
         photoData = nil
         marketPrice = nil
+        marketPriceSource = nil
         selectedPercentage = nil
         customPercentage = ""
         referenceBuyPrice = nil
         isLoadingImage = false
+        isLoadingMarketPrice = false
         // Keep: purchaseDate, graded, gradeLevel, condition, saleDate
     }
     
@@ -817,15 +911,21 @@ struct AddCardFormView: View {
                 purchaseDate: card.purchaseDate,
                 photoData: card.photoData,
                 marketPrice: card.marketPrice,
-                marketPriceDate: card.marketPrice != nil ? Date() : nil
+                marketPriceDate: card.marketPrice != nil ? Date() : nil,
+                marketPriceSource: card.marketPriceSource
             )
             
             modelContext.insert(newCard)
         }
         
-        try? modelContext.save()
-        dismiss()
-        onSave()
+        do {
+            try modelContext.save()
+            dismiss()
+            onSave()
+        } catch {
+            alertMessage = "Failed to save cards: \(error.localizedDescription)"
+            showingAlert = true
+        }
     }
 }
 
@@ -1072,11 +1172,14 @@ struct AddSealedFormView: View {
         modelContext.insert(newSealedProduct)
         
         // Explicitly save the context
-        try? modelContext.save()
-        
-        // Dismiss and call completion
-        dismiss()
-        onSave()
+        do {
+            try modelContext.save()
+            dismiss()
+            onSave()
+        } catch {
+            alertMessage = "Failed to save sealed product: \(error.localizedDescription)"
+            showingAlert = true
+        }
     }
 }
 
@@ -1238,11 +1341,14 @@ struct AddMiscFormView: View {
         modelContext.insert(newMiscExpense)
         
         // Explicitly save the context
-        try? modelContext.save()
-        
-        // Dismiss and call completion
-        dismiss()
-        onSave()
+        do {
+            try modelContext.save()
+            dismiss()
+            onSave()
+        } catch {
+            alertMessage = "Failed to save expense: \(error.localizedDescription)"
+            showingAlert = true
+        }
     }
     
 }

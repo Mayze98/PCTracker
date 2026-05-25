@@ -220,6 +220,16 @@ struct PokemonTCGSetImages: Codable {
     let logo: String?
 }
 
+// MARK: - Debug Logging
+
+/// Only prints in DEBUG builds. No-op in release.
+@inline(__always)
+func debugLog(_ message: @autoclosure () -> String) {
+    #if DEBUG
+    debugLog(message())
+    #endif
+}
+
 // MARK: - Service
 
 struct PokemonTCGService {
@@ -619,50 +629,50 @@ struct PokemonTCGService {
         // Strip PSA grade from name if present (condition text gets appended to name on save)
         let cleanName = graded ? stripGradeFromName(name) : name
         
-        let apiKey = UserDefaults.standard.string(forKey: "rapidApiKey") ?? ""
+        let apiKey = KeychainHelper.load(for: "rapidApiKey") ?? ""
         let hasApiKey = !apiKey.isEmpty
         
         // Try eBay for graded cards when API key is available
         if graded, let grade = gradeLevel, hasApiKey {
-            print("[PriceService] Attempting eBay lookup for '\(cleanName)' PSA \(grade)")
+            debugLog("[PriceService] Attempting eBay lookup for '\(cleanName)' PSA \(grade)")
             do {
                 if let result = try await fetchEbayGradedPrice(name: cleanName, number: number, cardSet: cardSet, gradeLevel: grade, apiKey: apiKey) {
-                    print("[PriceService] eBay price found: \(result.price) CAD, \(result.soldItems.count) sold items")
+                    debugLog("[PriceService] eBay price found: \(result.price) CAD, \(result.soldItems.count) sold items")
                     return MarketPriceResult(price: result.price, source: "ebay", ebaySoldItems: result.soldItems)
                 } else {
-                    print("[PriceService] eBay returned no results, falling back to TCGPlayer")
+                    debugLog("[PriceService] eBay returned no results, falling back to TCGPlayer")
                 }
             } catch {
-                print("[PriceService] eBay lookup failed: \(error), falling back to TCGPlayer")
+                debugLog("[PriceService] eBay lookup failed: \(error), falling back to TCGPlayer")
             }
         }
         
         // Try eBay for non-graded cards with condition filtering when API key is available
         if !graded, hasApiKey, let cond = condition, !cond.isEmpty {
-            print("[PriceService] Attempting eBay condition lookup for '\(cleanName)' condition: \(cond)")
+            debugLog("[PriceService] Attempting eBay condition lookup for '\(cleanName)' condition: \(cond)")
             do {
                 if let result = try await fetchEbayConditionPrice(name: cleanName, number: number, cardSet: cardSet, condition: cond, apiKey: apiKey) {
-                    print("[PriceService] eBay condition price found: \(result.price) CAD, \(result.soldItems.count) sold items")
+                    debugLog("[PriceService] eBay condition price found: \(result.price) CAD, \(result.soldItems.count) sold items")
                     return MarketPriceResult(price: result.price, source: "ebay", ebaySoldItems: result.soldItems)
                 } else {
-                    print("[PriceService] eBay condition returned no results, falling back to TCGPlayer")
+                    debugLog("[PriceService] eBay condition returned no results, falling back to TCGPlayer")
                 }
             } catch {
-                print("[PriceService] eBay condition lookup failed: \(error), falling back to TCGPlayer")
+                debugLog("[PriceService] eBay condition lookup failed: \(error), falling back to TCGPlayer")
             }
         }
         
         if !hasApiKey {
-            print("[PriceService] No RapidAPI key configured, using TCGPlayer")
+            debugLog("[PriceService] No RapidAPI key configured, using TCGPlayer")
         }
         
         // Fall back to TCGPlayer
         guard let card = try await findCard(name: cleanName, number: number) else {
-            print("[PriceService] TCGPlayer: no card found for '\(cleanName)' number: \(number ?? "nil")")
+            debugLog("[PriceService] TCGPlayer: no card found for '\(cleanName)' number: \(number ?? "nil")")
             return nil
         }
         guard let price = card.tcgplayer?.prices?.bestPrice else {
-            print("[PriceService] TCGPlayer: card found but no price data")
+            debugLog("[PriceService] TCGPlayer: card found but no price data")
             return nil
         }
         let cadPrice = try await adjustedPrice(price)
@@ -687,7 +697,7 @@ struct PokemonTCGService {
         keywordParts.append("PSA \(gradeLevel)")
         let keywords = keywordParts.joined(separator: " ")
         
-        print("[eBay] Search keywords: \(keywords)")
+        debugLog("[eBay] Search keywords: \(keywords)")
         
         let body: [String: Any] = [
             "keywords": keywords,
@@ -709,13 +719,13 @@ struct PokemonTCGService {
         
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
-            print("[eBay] No HTTP response")
+            debugLog("[eBay] No HTTP response")
             return nil
         }
-        print("[eBay] HTTP status: \(http.statusCode)")
+        debugLog("[eBay] HTTP status: \(http.statusCode)")
         if http.statusCode != 200 {
             if let body = String(data: data, encoding: .utf8) {
-                print("[eBay] Error body: \(body.prefix(500))")
+                debugLog("[eBay] Error body: \(body.prefix(500))")
             }
             return nil
         }
@@ -724,7 +734,7 @@ struct PokemonTCGService {
         let searchURL = decoded.response_url
         
         guard let products = decoded.products, !products.isEmpty else {
-            print("[eBay] No products in response")
+            debugLog("[eBay] No products in response")
             return nil
         }
         
@@ -772,13 +782,13 @@ struct PokemonTCGService {
             return true
         }
         
-        print("[eBay] \(products.count) total, \(matchedProducts.count) match PSA \(gradeLevel) + number \(cleanedNum ?? "n/a")")
+        debugLog("[eBay] \(products.count) total, \(matchedProducts.count) match PSA \(gradeLevel) + number \(cleanedNum ?? "n/a")")
         for item in matchedProducts.suffix(5) {
-            print("[eBay]   -> \(item.title ?? "?"): \(item.sale_price?.doubleValue ?? 0)")
+            debugLog("[eBay]   -> \(item.title ?? "?"): \(item.sale_price?.doubleValue ?? 0)")
         }
         
         guard !matchedProducts.isEmpty else {
-            print("[eBay] No products matched filters, skipping unfiltered average")
+            debugLog("[eBay] No products matched filters, skipping unfiltered average")
             return nil
         }
         
@@ -841,7 +851,7 @@ struct PokemonTCGService {
         }
         let keywords = keywordParts.joined(separator: " ")
         
-        print("[eBay-Condition] Search keywords: \(keywords), condition: \(condition)")
+        debugLog("[eBay-Condition] Search keywords: \(keywords), condition: \(condition)")
         
         let body: [String: Any] = [
             "keywords": keywords,
@@ -863,13 +873,13 @@ struct PokemonTCGService {
         
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
-            print("[eBay-Condition] No HTTP response")
+            debugLog("[eBay-Condition] No HTTP response")
             return nil
         }
-        print("[eBay-Condition] HTTP status: \(http.statusCode)")
+        debugLog("[eBay-Condition] HTTP status: \(http.statusCode)")
         if http.statusCode != 200 {
             if let body = String(data: data, encoding: .utf8) {
-                print("[eBay-Condition] Error body: \(body.prefix(500))")
+                debugLog("[eBay-Condition] Error body: \(body.prefix(500))")
             }
             return nil
         }
@@ -878,7 +888,7 @@ struct PokemonTCGService {
         let searchURL = decoded.response_url
         
         guard let products = decoded.products, !products.isEmpty else {
-            print("[eBay-Condition] No products in response")
+            debugLog("[eBay-Condition] No products in response")
             return nil
         }
         
@@ -920,13 +930,13 @@ struct PokemonTCGService {
             return true
         }
         
-        print("[eBay-Condition] \(products.count) total, \(matchedProducts.count) match condition '\(condition)' + number \(cleanedNum ?? "n/a")")
+        debugLog("[eBay-Condition] \(products.count) total, \(matchedProducts.count) match condition '\(condition)' + number \(cleanedNum ?? "n/a")")
         for item in matchedProducts.suffix(5) {
-            print("[eBay-Condition]   -> \(item.title ?? "?"): \(item.sale_price?.doubleValue ?? 0) [\(item.condition ?? "?")]")
+            debugLog("[eBay-Condition]   -> \(item.title ?? "?"): \(item.sale_price?.doubleValue ?? 0) [\(item.condition ?? "?")]")
         }
         
         guard !matchedProducts.isEmpty else {
-            print("[eBay-Condition] No products matched filters")
+            debugLog("[eBay-Condition] No products matched filters")
             return nil
         }
         

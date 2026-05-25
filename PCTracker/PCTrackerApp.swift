@@ -89,23 +89,25 @@ struct PCTrackerApp: App {
         do {
             return try ModelContainer(for: schema, configurations: [modelConfiguration])
         } catch {
-            // Log the error for debugging
-            print("❌ Fatal Error: Could not create ModelContainer")
+            #if DEBUG
+            print("Fatal Error: Could not create ModelContainer")
             print("Error details: \(error)")
             print("Error localized description: \(error.localizedDescription)")
+            print("Attempting fallback to in-memory storage...")
+            #endif
             
             // Fall back to in-memory storage if CloudKit configuration fails
-            print("⚠️ Attempting fallback to in-memory storage...")
             do {
                 let fallbackConfiguration = ModelConfiguration(
                     schema: schema,
                     isStoredInMemoryOnly: true
                 )
                 let container = try ModelContainer(for: schema, configurations: [fallbackConfiguration])
-                print("✅ Successfully created in-memory ModelContainer")
+                #if DEBUG
+                print("Successfully created in-memory ModelContainer")
+                #endif
                 return container
             } catch {
-                print("❌ Fallback also failed: \(error)")
                 fatalError("Could not create ModelContainer even with fallback: \(error)")
             }
         }

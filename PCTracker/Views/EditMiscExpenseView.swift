@@ -145,7 +145,9 @@ struct EditMiscExpenseView: View {
         do {
             try modelContext.save()
         } catch {
+            #if DEBUG
             print("Error saving expense: \(error)")
+            #endif
         }
         
         dismiss()
@@ -154,7 +156,9 @@ struct EditMiscExpenseView: View {
 
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: MiscExpense.self, configurations: config)
+    guard let container = try? ModelContainer(for: MiscExpense.self, configurations: config) else {
+        fatalError("Preview ModelContainer failed to initialize")
+    }
     
     let sampleExpense = MiscExpense(itemDescription: "Shipping Supplies", cost: 25.00, notes: "Boxes and bubble wrap")
     container.mainContext.insert(sampleExpense)

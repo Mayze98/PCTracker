@@ -150,7 +150,9 @@ struct AddSalePriceView: View {
         do {
             try modelContext.save()
         } catch {
+            #if DEBUG
             print("Error saving sale price: \(error)")
+            #endif
         }
         
         dismiss()
@@ -159,7 +161,9 @@ struct AddSalePriceView: View {
 
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: Cards.self, SealedProduct.self, configurations: config)
+    guard let container = try? ModelContainer(for: Cards.self, SealedProduct.self, configurations: config) else {
+        fatalError("Preview ModelContainer failed to initialize")
+    }
     
     let sampleCard = Cards(name: "Pikachu", number: "25", graded: false, condition: "NM", buyPrice: 10.00)
     

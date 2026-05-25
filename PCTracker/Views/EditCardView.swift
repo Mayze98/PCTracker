@@ -35,6 +35,8 @@ struct EditCardView: View {
     @State private var ebaySoldItems: [EbaySoldItem] = []
     @State private var showingSearch = false
     @State private var isLoadingImage = false
+    @State private var showingSaveError = false
+    @State private var saveErrorMessage = ""
 
     init(card: Cards) {
         self.card = card
@@ -46,7 +48,7 @@ struct EditCardView: View {
         _gradeLevel = State(initialValue: card.gradeLevel ?? 10)
         _condition = State(initialValue: card.condition)
         _buyPrice = State(initialValue: String(format: "%.2f", CurrencyFormatter.displayAmount(card.buyPrice, displayCode: displayCode)))
-        _salePrice = State(initialValue: card.salePrice != nil ? String(format: "%.2f", CurrencyFormatter.displayAmount(card.salePrice!, displayCode: displayCode)) : "")
+        _salePrice = State(initialValue: card.salePrice.map { String(format: "%.2f", CurrencyFormatter.displayAmount($0, displayCode: displayCode)) } ?? "")
         _saleDate = State(initialValue: card.saleDate ?? Date())
         _purchaseDate = State(initialValue: card.purchaseDate)
         _photoData = State(initialValue: card.photoData)
@@ -349,6 +351,11 @@ struct EditCardView: View {
                     await MainActor.run { selectedPhotoItem = nil }
                 }
             }
+            .alert("Save Error", isPresented: $showingSaveError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(saveErrorMessage)
+            }
         }
     }
     
@@ -401,7 +408,12 @@ struct EditCardView: View {
                         card.marketPriceDate = Date()
                         card.marketPriceSource = result.source
                         ebaySoldItems = result.ebaySoldItems
-                        try? modelContext.save()
+                        do {
+                            try modelContext.save()
+                        } catch {
+                            saveErrorMessage = "Failed to save market price: \(error.localizedDescription)"
+                            showingSaveError = true
+                        }
                     } else {
                         priceError = "No market price found for this card"
                     }
@@ -442,7 +454,9 @@ struct EditCardView: View {
         do {
             try modelContext.save()
         } catch {
+            #if DEBUG
             print("Error saving card: \(error)")
+            #endif
         }
         
         dismiss()
@@ -451,7 +465,9 @@ struct EditCardView: View {
 
 #Preview {
     let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: Cards.self, SealedProduct.self, MiscExpense.self, configurations: config)
+    guard let container = try? ModelContainer(for: Cards.self, SealedProduct.self, MiscExpense.self, configurations: config) else {
+        fatalError("Preview ModelContainer failed to initialize")
+    }
     
     let sampleCard = Cards(name: "Pikachu VMAX", number: "044/185", graded: false, condition: "NM", buyPrice: 45.00, marketPrice: 62.50, marketPriceDate: Date())
     container.mainContext.insert(sampleCard)

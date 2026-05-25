@@ -28,9 +28,9 @@ class CSVExporter {
         
         // Add cards
         for card in cards {
-            let conditionText = card.graded ? (card.gradeLevel != nil ? "PSA \(card.gradeLevel!)" : "GRADED") : card.condition
+            let conditionText = card.graded ? (card.gradeLevel.map { "PSA \($0)" } ?? "GRADED") : card.condition
             let buyPrice = displayPrice(card.buyPrice, code: currencyCode)
-            let marketPrice = card.marketPrice != nil ? displayPrice(card.marketPrice!, code: currencyCode) : ""
+            let marketPrice = card.marketPrice.map { displayPrice($0, code: currencyCode) } ?? ""
             let dateStr = dateFormatter.string(from: card.purchaseDate)
             let number = card.number ?? ""
             let cardSet = card.cardSet ?? ""
@@ -58,12 +58,12 @@ class CSVExporter {
         
         // Add sold cards
         for card in cards {
-            let conditionText = card.graded ? (card.gradeLevel != nil ? "PSA \(card.gradeLevel!)" : "GRADED") : card.condition
+            let conditionText = card.graded ? (card.gradeLevel.map { "PSA \($0)" } ?? "GRADED") : card.condition
             let buyPrice = displayPrice(card.buyPrice, code: currencyCode)
-            let salePrice = card.salePrice != nil ? displayPrice(card.salePrice!, code: currencyCode) : "0.00"
-            let profit = card.profit != nil ? displayPrice(card.profit!, code: currencyCode) : "0.00"
+            let salePrice = card.salePrice.map { displayPrice($0, code: currencyCode) } ?? "0.00"
+            let profit = card.profit.map { displayPrice($0, code: currencyCode) } ?? "0.00"
             let dateStr = dateFormatter.string(from: card.purchaseDate)
-            let saleDateStr = card.saleDate != nil ? dateFormatter.string(from: card.saleDate!) : ""
+            let saleDateStr = card.saleDate.map { dateFormatter.string(from: $0) } ?? ""
             let number = card.number ?? ""
             let cardSet = card.cardSet ?? ""
             
@@ -73,10 +73,10 @@ class CSVExporter {
         // Add sold sealed products
         for product in sealedProducts {
             let buyPrice = displayPrice(product.buyPrice, code: currencyCode)
-            let salePrice = product.salePrice != nil ? displayPrice(product.salePrice!, code: currencyCode) : "0.00"
-            let profit = product.profit != nil ? displayPrice(product.profit!, code: currencyCode) : "0.00"
+            let salePrice = product.salePrice.map { displayPrice($0, code: currencyCode) } ?? "0.00"
+            let profit = product.profit.map { displayPrice($0, code: currencyCode) } ?? "0.00"
             let dateStr = dateFormatter.string(from: product.purchaseDate)
-            let saleDateStr = product.saleDate != nil ? dateFormatter.string(from: product.saleDate!) : ""
+            let saleDateStr = product.saleDate.map { dateFormatter.string(from: $0) } ?? ""
             let expansion = product.expansion ?? ""
             
             csv += "Sealed Product,\"\(product.name)\",,,\"\(expansion)\",\(buyPrice),\(salePrice),\(profit),\(dateStr),\(saleDateStr)\n"
@@ -109,7 +109,7 @@ struct SettingsView: View {
     @AppStorage("currencyCode") private var currencyCode: String = "CAD"
     @AppStorage("usdToCadRate") private var usdToCadRate: Double = 1.35
     @AppStorage("usdToCadRateUpdatedAt") private var usdToCadRateUpdatedAt: Double = 0
-    @AppStorage("rapidApiKey") private var rapidApiKey: String = ""
+    @State private var rapidApiKey: String = ""
     @State private var showingExportSheet = false
     @State private var showingShareSheet = false
     @State private var exportType: ExportType = .inventory
@@ -334,6 +334,21 @@ struct SettingsView: View {
             })
             .onAppear {
                 checkiCloudStatus()
+                // Load API key from Keychain
+                rapidApiKey = KeychainHelper.load(for: "rapidApiKey") ?? ""
+                // Migrate from UserDefaults if present
+                if rapidApiKey.isEmpty, let legacyKey = UserDefaults.standard.string(forKey: "rapidApiKey"), !legacyKey.isEmpty {
+                    KeychainHelper.save(legacyKey, for: "rapidApiKey")
+                    UserDefaults.standard.removeObject(forKey: "rapidApiKey")
+                    rapidApiKey = legacyKey
+                }
+            }
+            .onChange(of: rapidApiKey) { _, newValue in
+                if newValue.isEmpty {
+                    KeychainHelper.delete(for: "rapidApiKey")
+                } else {
+                    KeychainHelper.save(newValue, for: "rapidApiKey")
+                }
             }
         }
     }
@@ -401,7 +416,9 @@ struct SettingsView: View {
             csvFileURL = tempURL
             showingShareSheet = true
         } catch {
+            #if DEBUG
             print("Failed to write CSV file: \(error)")
+            #endif
         }
     }
     
