@@ -226,7 +226,7 @@ struct PokemonTCGSetImages: Codable {
 @inline(__always)
 func debugLog(_ message: @autoclosure () -> String) {
     #if DEBUG
-    debugLog(message())
+    print(message())
     #endif
 }
 
